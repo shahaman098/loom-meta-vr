@@ -9,11 +9,13 @@ import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { installEntryOverlay } from './entry.js';
 import { LoomSystem } from './loom.js';
+import { installMixedReality } from './mixed-reality.js';
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
   projectOptions,
 ).then((world) => {
   installEntryOverlay(world);
+  installMixedReality(world);
   world.registerSystem(LoomSystem);
 });

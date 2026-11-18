@@ -568,7 +568,7 @@ export function createHarbor() {
     timber,
     1.64,
     -0.085,
-    -5.96,
+    -4.256,
   );
   for (const x of [1.28, 2.0])
     part(
@@ -647,8 +647,20 @@ export function createHarbor() {
       y + h * 0.9 + 0.125,
       z,
     );
-    roof.rotation.y = Math.PI / 4;
-    roof.scale.z = 1.06;
+    roof.rotation.y = Math.PI / 4 + (rand() - 0.5) * 0.24;
+    roof.scale.x = 0.9 + rand() * 0.2;
+    roof.scale.z = 0.94 + rand() * 0.18;
+    if (i % 3 === 0) {
+      part(
+        harbor,
+        'Chimney',
+        new BoxGeometry(0.07, 0.23, 0.07),
+        timber,
+        x + 0.12,
+        y + h * 0.9 + 0.22,
+        z - 0.08,
+      );
+    }
     for (const dx of [-0.11, 0.11]) {
       part(
         harbor,
@@ -670,6 +682,93 @@ export function createHarbor() {
       );
     }
   }
+  // A small chapel bell tower breaks the repeated cottage roofline and gives
+  // the west inlet a recognizable coastal landmark.
+  part(
+    harbor,
+    'Chapel nave',
+    new BoxGeometry(0.62, 0.42, 0.5),
+    ivory,
+    -4.25,
+    0.98,
+    -9.18,
+  );
+  const chapelRoof = part(
+    harbor,
+    'Chapel roof',
+    new CylinderGeometry(0, 0.48, 0.3, 4),
+    red,
+    -4.25,
+    1.25,
+    -9.18,
+  );
+  chapelRoof.rotation.y = Math.PI / 4;
+  chapelRoof.scale.z = 1.02;
+  part(
+    harbor,
+    'Bell tower',
+    new BoxGeometry(0.2, 1.08, 0.2),
+    ivory,
+    -4.55,
+    1.22,
+    -9.18,
+  );
+  const spire = part(
+    harbor,
+    'Bell tower spire',
+    new CylinderGeometry(0, 0.22, 0.34, 4),
+    red,
+    -4.55,
+    1.93,
+    -9.18,
+  );
+  spire.rotation.y = Math.PI / 4;
+  part(
+    harbor,
+    'Bell opening',
+    new BoxGeometry(0.11, 0.15, 0.02),
+    navy,
+    -4.55,
+    1.5,
+    -9.07,
+  );
+  part(
+    harbor,
+    'Chapel door',
+    new BoxGeometry(0.12, 0.22, 0.02),
+    navy,
+    -4.25,
+    0.86,
+    -8.92,
+  );
+  part(
+    harbor,
+    'Weathervane mast',
+    new BoxGeometry(0.016, 0.22, 0.016),
+    gold,
+    -4.55,
+    2.21,
+    -9.18,
+  );
+  part(
+    harbor,
+    'Weathervane cross',
+    new BoxGeometry(0.18, 0.016, 0.016),
+    gold,
+    -4.55,
+    2.24,
+    -9.18,
+  );
+  part(
+    harbor,
+    'Weathervane crown',
+    new BoxGeometry(0.016, 0.08, 0.016),
+    gold,
+    -4.55,
+    2.3,
+    -9.18,
+  );
+
   const pines = new InstancedMesh(
     new CylinderGeometry(0.012, 0.12, 0.72, 7),
     ink('#405953'),

@@ -15,8 +15,22 @@ export const Peg = createComponent('Peg', {
 
 /** Observable state for debugging and evidence. */
 export const HarborDiscovery = createComponent('HarborDiscovery', {
+  station: { type: Types.Int32, default: 0 },
+  cabinetOpen: { type: Types.Boolean, default: false },
+  rakingLight: { type: Types.Boolean, default: false },
+  magnified: { type: Types.Boolean, default: false },
+  phrase: { type: Types.String, default: '' },
   poolNotes: { type: Types.Int32, default: 0 },
   inspectedFragments: { type: Types.Int32, default: 0 },
+});
+
+export const HarborSpot = createComponent('HarborSpot', {
+  station: { type: Types.Int32, default: 0 },
+  action: { type: Types.Int32, default: 0 },
+});
+
+export const HarborControl = createComponent('HarborControl', {
+  index: { type: Types.Int32, default: 0 },
 });
 
 export const LoomStatus = createComponent('LoomStatus', {
@@ -39,4 +53,4 @@ export const LoomStatus = createComponent('LoomStatus', {
   lastTo: { type: Types.Int32, default: -1 },
 });
 
-export default defineComponents([Peg, LoomStatus, HarborDiscovery]);
+export default defineComponents([Peg, LoomStatus, HarborDiscovery, HarborControl, HarborSpot]);

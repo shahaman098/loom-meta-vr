@@ -18,6 +18,7 @@ import {
   PlaneGeometry,
   Quaternion,
   RayInteractable,
+  Pressed,
   SRGBColorSpace,
   TorusGeometry,
   Vector3,
@@ -25,8 +26,12 @@ import {
 } from '@iwsdk/core';
 import type { Entity, Object3D } from '@iwsdk/core';
 import { Harbor } from './harbor.js';
+import { Festival } from './festival.js';
+import { isMixedReality } from './mixed-reality.js';
 import { HarborWalk } from './harbor-walk.js';
-import { LoomStatus, Peg } from './components.js';
+import { FieldStations } from './field-stations.js';
+import { FieldChart } from './field-chart.js';
+import { LoomStatus, Peg, HarborControl, HarborSpot } from './components.js';
 import { PEG_TIP_COLOR, createPeg } from './scene-assets/loom.scene-asset.js';
 
 const ROWS = 5;
@@ -295,6 +300,8 @@ type Segment = {
 };
 
 export class LoomSystem extends createSystem({
+  fieldPressed: { required:[HarborSpot,Pressed] },
+  chartHeld: { required: [HarborControl, Grabbed] },
   held: { required: [Peg, Grabbed] },
 }) {
   private board!: Object3D;
@@ -334,6 +341,20 @@ export class LoomSystem extends createSystem({
   private progressTextures: CanvasTexture[] = [];
   private assistTimer = 0;
   private missStreak = 0;
+  // Memory weave: from card 3 the route shows briefly, then fades.
+  private memoryCardId = '';
+  private memoryPreview = 0;
+  private memoryPeek = 0;
+  private memoryPeeks = 0;
+  private memorySecond = -1;
+  // Harbor Festival finale after the sixth archive card.
+  private festival!: Festival;
+  private festivalTime = 0;
+  private sessionPeeks = 0;
+  private sessionStart = performance.now();
+  private stitchNote = '';
+  private stitchNoteTimer = 0;
+  private wrongTimer = 0;
   private idleTimer = 0;
   private cardStart = 0;
   private lastTime = 0;
@@ -361,6 +382,8 @@ export class LoomSystem extends createSystem({
 
   private concertTime = 0;
   private harbor!: Harbor;
+  private field!: FieldStations;
+  private chart!: FieldChart;
   private walk!: HarborWalk;
   private audio: AudioContext | null = null;
 
@@ -386,6 +409,15 @@ export class LoomSystem extends createSystem({
     this.createProgressStrip();
     this.harbor = new Harbor(this.world.requireSceneEntity('selvedge-harbor').object3D!,
       window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    this.festival = new Festival(this.world);
+    this.cleanupFuncs.push(() => this.festival.dispose());
+    this.field=new FieldStations(this.world,this.boardEntity,CARDS,this.cardImages,
+      ()=>this.activeCard()?.melody[0]??60,
+      (pitch,volume,when,duration)=>{this.ensureAudio();this.playMidi(pitch,volume,when,duration);},
+      color=>{this.harbor.flagColor=color;if(this.walk)this.updateHarbor();},
+      ()=>this.harbor.tideReward(),
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    this.chart=new FieldChart(this.world,this.field);
     this.walk = new HarborWalk(this.world, this.pegs.map(peg => peg.tip), (from, to) => {
       if (this.celebrating > 0) return;
       this.ensureAudio();
@@ -402,7 +434,14 @@ export class LoomSystem extends createSystem({
       this.harbor.stitchFlag(this.saved.lastFlag ?? concert.edges);
       this.harbor.setScore(3, true);
       return this.concertTime;
-    });
+    }, this.field);
+    this.field.onChange=()=>{this.walk.refresh();this.chart.refresh();};
+    this.cleanupFuncs.push(this.queries.fieldPressed.subscribe('qualify',e=>this.field.press(e)),
+      this.queries.chartHeld.subscribe('disqualify',e=>this.chart.released(e)),
+      ()=>{this.chart.dispose();this.field.dispose();});
+    this.applyHarborMemory();
+    this.harbor.setTideWon(this.field.hasTideSuccess());
+    this.markHarborVisit();
     this.updateHarbor();
     this.syncStatus();
     if (this.demoFree) this.seedDemoTapestry();
@@ -666,6 +705,7 @@ export class LoomSystem extends createSystem({
       return;
     }
     this.completedCards.add(card.id);
+    this.applyHarborMemory();
     this.saved.lastFlag = this.flagEdges();
     this.saveProgress();
     this.renderProgressTiles();
@@ -911,13 +951,19 @@ export class LoomSystem extends createSystem({
     if (to >= 0 && to !== from && this.celebrating === 0) {
       this.addSegment(from, to);
     } else if (to < 0) {
+      this.stitchNote = 'Release near a glowing peg.';
+      this.stitchNoteTimer = 2.2;
       this.missStreak += 1;
       if (this.missStreak >= 2) {
         this.assistTimer = 8;
       }
+    } else if (to === from) {
+      this.stitchNote = 'Choose a different peg.';
+      this.stitchNoteTimer = 1.8;
     }
     this.cardDirty = true;
     this.syncStatus();
+    if (this.stitchNote !== '') this.updateHarbor();
   }
 
   private syncStatus(): void {
@@ -974,10 +1020,50 @@ export class LoomSystem extends createSystem({
     }
   }
 
+  private isRequiredEdge(from: number, to: number): boolean {
+    const card = this.activeCard();
+    if (card == null || this.freeMode) {
+      return true;
+    }
+    const key = edgeKey(from, to);
+    return card.edges.some(([a, b]) => edgeKey(a, b) === key);
+  }
+
+  private flashWrong(from: number, to: number): void {
+    const a = this.pegByIndex.get(from);
+    const b = this.pegByIndex.get(to);
+    if (a != null && b != null) {
+      this.hintPegA = from;
+      this.hintPegB = to;
+      this.setSegmentBetween(this.hintMesh, a.position, b.position);
+    }
+    this.hintMaterial.color.setHex(0xff6a55);
+    this.hintMaterial.opacity = 0.86;
+    this.wrongTimer = 0.9;
+    if (this.isMemoryCard()) {
+      this.memoryPeek = 2.5;
+      this.memoryPeeks += 1;
+      this.sessionPeeks += 1;
+      this.stitchNote = 'Not in this pattern — the card shows it again.';
+    } else {
+      this.stitchNote = 'Not in this pattern — follow the ghost thread.';
+    }
+    this.stitchNoteTimer = 2.8;
+    this.playMidi(48, 0.05, 0, 0.3);
+    this.playMidi(49, 0.04, 0.12, 0.3);
+    this.cardDirty = true;
+    this.syncStatus();
+    this.updateHarbor();
+  }
+
   private addSegment(from: number, to: number): void {
     const key = edgeKey(from, to);
     if (this.drawnKeys.has(key)) {
       this.playPluck(to, 0.035);
+      return;
+    }
+    if (!this.isRequiredEdge(from, to)) {
+      this.flashWrong(from, to);
       return;
     }
     const slot = this.segments.find((segment) => segment.key === '');
@@ -1023,7 +1109,16 @@ export class LoomSystem extends createSystem({
     ) {
       this.markCompleted(active);
       this.celebrating = 3.6;
-      if (active.melody.length > 0) {
+      const archiveDone =
+        CARDS.some((card) => card.id === active.id) &&
+        CARDS.every((card) => this.completedCards.has(card.id));
+      if (archiveDone) {
+        // The last archive card opens the Harbor Festival finale.
+        this.celebrating = 15;
+        this.festivalTime = 15;
+        this.festival.start(13, isMixedReality());
+        this.playMedley();
+      } else if (active.melody.length > 0) {
         this.playMelody(active.melody);
       } else {
         this.playChord();
@@ -1033,6 +1128,8 @@ export class LoomSystem extends createSystem({
     this.missStreak = 0;
     this.assistTimer = 0;
     this.idleTimer = 0;
+    this.stitchNote = '';
+    this.stitchNoteTimer = 0;
     this.updateHarbor();
     this.syncStatus();
   }
@@ -1049,7 +1146,29 @@ export class LoomSystem extends createSystem({
     return CARDS.find(card => card.id === ids[ids.length - 1]);
   }
 
+  private applyHarborMemory(): void {
+    this.harbor.setMemory(
+      this.completedCards.size,
+      this.completedCards.size >= CARDS.length,
+    );
+  }
+
+  private markHarborVisit(): void {
+    try {
+      const key = 'loom.harbor.visit.v1';
+      const last = window.localStorage.getItem(key);
+      const today = todayKey();
+      if (last != null && last !== today && this.completedCards.size > 0) {
+        this.harbor.welcomeBack();
+      }
+      window.localStorage.setItem(key, today);
+    } catch {
+      // A blocked localStorage should not stop the harbor from loading.
+    }
+  }
+
   private updateHarbor(): void {
+    this.applyHarborMemory();
     const card = this.activeCard();
     const correct = card
       ? card.edges.filter(([a,b]) => this.drawnKeys.has(edgeKey(a,b))).length
@@ -1062,12 +1181,53 @@ export class LoomSystem extends createSystem({
     this.harbor.stitchFlag(flagEdges);
     if (this.concertTime <= 0) this.harbor.setScore(correct, finished);
     const next = card?.edges.find(([a,b]) => !this.drawnKeys.has(edgeKey(a,b)));
-    const goal = next ? 'Next: peg ' + (next[0]+1) + ' to ' + (next[1]+1) : '';
-    const state = finished ? 'The terns have returned' : correct >= 2
-      ? 'Cutters under sail' : correct === 1 ? 'Beacon lit' : 'Light the beacon';
-    this.walk.setScore(card?.title ?? 'Free weave', [state,goal].filter(Boolean).join(' · '), lastCard?.melodyTitle ?? '', next);
+    const goal = next
+      ? this.isMemoryCard() && this.memoryPreview > 0
+        ? 'Memorise the pattern on the card'
+        : this.isMemoryCard() && this.idleTimer <= 12
+          ? 'Weave it from memory'
+          : 'Select peg ' + (next[0]+1) + ', then peg ' + (next[1]+1)
+      : '';
+    const state = this.stitchNote || (finished
+      ? 'The terns have returned'
+      : correct >= 2
+        ? 'Cutters under sail'
+        : correct === 1
+          ? 'Beacon lit'
+          : 'Light the beacon');
+    let completion = '';
+    if (this.celebrating > 0) {
+      if (card?.id.startsWith('daily-')) {
+        completion = 'WOVEN · Daily weave complete';
+      } else {
+        const nextCard = CARDS.slice(this.cardIndex + 1).find(
+          (candidate) => !this.completedCards.has(candidate.id),
+        );
+        const memory = this.isMemoryCard()
+          ? this.memoryPeeks === 0
+            ? ' · from memory, no peeks'
+            : ` · from memory, ${this.memoryPeeks} peek${this.memoryPeeks > 1 ? 's' : ''}`
+          : '';
+        completion = nextCard
+          ? `WOVEN${memory} · next: ${nextCard.title}`
+          : this.saved.dailyDate !== todayKey()
+            ? 'WOVEN · next: DAILY WEAVE'
+            : 'WOVEN · archive complete';
+      }
+    }
+    this.walk.setScore(
+      card?.title ?? 'Free weave',
+      [state,goal].filter(Boolean).join(' · '),
+      lastCard?.melodyTitle ?? '',
+      next,
+      completion,
+    );
     this.boardEntity.setValue(LoomStatus, 'harborStitches', correct);
-    this.boardEntity.setValue(LoomStatus, 'ternsVisible', finished);
+    this.boardEntity.setValue(
+      LoomStatus,
+      'ternsVisible',
+      finished || this.completedCards.size >= CARDS.length,
+    );
   }
 
   private isCardComplete(card: CardDef): boolean {
@@ -1194,10 +1354,59 @@ export class LoomSystem extends createSystem({
     this.syncStatus();
   }
 
+  private isMemoryCard(): boolean {
+    return (
+      !this.freeMode &&
+      !this.dailyMode &&
+      this.cardIndex >= 2 &&
+      this.activeCard() != null
+    );
+  }
+
+  private memoryHidden(): boolean {
+    return this.isMemoryCard() && this.memoryPreview <= 0 && this.memoryPeek <= 0;
+  }
+
+  private updateMemory(delta: number): void {
+    const card = this.isMemoryCard() ? this.activeCard() : null;
+    if (card == null) {
+      this.memoryCardId = '';
+      return;
+    }
+    if (card.id !== this.memoryCardId) {
+      this.memoryCardId = card.id;
+      this.memoryPreview = 6;
+      this.memoryPeek = 0;
+      this.memoryPeeks = 0;
+      this.memorySecond = -1;
+      this.cardDirty = true;
+      this.updateHarbor();
+    }
+    if (this.celebrating > 0) return;
+    if (this.memoryPreview > 0) {
+      this.memoryPreview -= delta;
+      const second = Math.ceil(Math.max(0, this.memoryPreview));
+      if (second !== this.memorySecond) {
+        this.memorySecond = second;
+        this.cardDirty = true;
+      }
+      if (this.memoryPreview <= 0) this.updateHarbor();
+    }
+    if (this.memoryPeek > 0) {
+      this.memoryPeek -= delta;
+      if (this.memoryPeek <= 0) {
+        this.cardDirty = true;
+        this.updateHarbor();
+      }
+    }
+  }
+
   private hideHint(): void {
     this.hintMesh.scale.set(0, 0, 0);
     this.hintPegA = -1;
     this.hintPegB = -1;
+    this.hintMaterial.color.setHex(0xffe6b8);
+    this.hintMaterial.opacity = 0.3;
   }
 
   private updateHint(time: number): void {
@@ -1335,6 +1544,9 @@ export class LoomSystem extends createSystem({
   }
 
   update(delta: number, time: number): void {
+    this.chart.update();
+    this.field.update(delta);
+    this.walk.update(delta);
     this.harbor.update(delta);
     if (this.concertTime > 0) {
       this.concertTime -= delta;
@@ -1342,6 +1554,30 @@ export class LoomSystem extends createSystem({
     }
     if (this.assistTimer > 0) {
       this.assistTimer -= delta;
+    }
+    this.updateMemory(delta);
+    if (this.festival.update(delta)) {
+      this.playMidi(31 + Math.floor(Math.random() * 6), 0.05, 0, 0.6);
+    }
+    if (this.festivalTime > 0) {
+      this.festivalTime -= delta;
+      if (this.festivalTime <= 0) this.cardDirty = true;
+    }
+    if (this.stitchNoteTimer > 0) {
+      this.stitchNoteTimer -= delta;
+      if (this.stitchNoteTimer <= 0 && this.stitchNote !== '') {
+        this.stitchNote = '';
+        this.cardDirty = true;
+        this.updateHarbor();
+      }
+    }
+    if (this.wrongTimer > 0) {
+      this.wrongTimer -= delta;
+      if (this.wrongTimer <= 0) {
+        this.hintMaterial.color.setHex(0xffe6b8);
+        this.hintMaterial.opacity = 0.3;
+        this.hideHint();
+      }
     }
     if (this.celebrating > 0) {
       this.celebrating -= delta;
@@ -1363,14 +1599,22 @@ export class LoomSystem extends createSystem({
       this.hideHint();
     } else {
       this.updateIdleHover();
-      if (this.celebrating > 0 || this.world.session == null) {
+      const interactive =
+        this.world.session != null || this.walk.isOpen;
+      const firstStitch =
+        this.cardIndex === 0 &&
+        this.drawnKeys.size === 0 &&
+        !this.freeMode &&
+        !this.dailyMode &&
+        this.celebrating === 0;
+      if (!interactive || this.celebrating > 0) {
         this.idleTimer = 0;
         this.hideHint();
       } else {
         this.idleTimer += delta;
-        if (this.idleTimer > 12) {
+        if ((firstStitch || this.idleTimer > 12) && this.wrongTimer <= 0) {
           this.updateHint(time);
-        } else {
+        } else if (this.wrongTimer <= 0) {
           this.hideHint();
         }
       }
@@ -1513,6 +1757,18 @@ export class LoomSystem extends createSystem({
     oscillator.connect(gain).connect(context.destination);
     oscillator.start(start);
     oscillator.stop(start + duration + 0.02);
+  }
+
+  /** The festival medley: the opening phrase of every archive melody. */
+  private playMedley(): void {
+    let at = 0;
+    for (const card of CARDS) {
+      card.melody.slice(0, 6).forEach((note) => {
+        this.playMidi(note, 0.045, at, 0.45);
+        at += 0.2;
+      });
+      at += 0.15;
+    }
   }
 
   private playMelody(notes: number[]): void {
@@ -1673,8 +1929,10 @@ export class LoomSystem extends createSystem({
     }
 
     const required = card?.edges ?? [];
+    const hideRoute = this.memoryHidden();
     required.forEach(([a, b], index) => {
       const drawn = this.drawnKeys.has(edgeKey(a, b));
+      if (!drawn && hideRoute) return;
       const rowA = Math.floor(a / COLS);
       const colA = a % COLS;
       const rowB = Math.floor(b / COLS);
@@ -1755,11 +2013,44 @@ export class LoomSystem extends createSystem({
       context.fillText('Free Weave. Pinch to add threads.', 42, 724);
       context.fillText('Sweep your hand across the threads to play.', 42, 752, 516);
     } else if (daily) {
-      context.fillText('Pinch a brass peg.', 42, 724);
-      context.fillText('Pull to another peg, then release.', 42, 752);
+      context.fillText('Select or pinch a glowing peg.', 42, 724);
+      context.fillText('Screen: select its partner. VR: pull and release.', 42, 752);
     } else {
-      context.fillText('Pinch a brass peg.', 42, 724);
-      context.fillText('Pull to another peg, then release.', 42, 752);
+      context.fillText('Select or pinch a glowing peg.', 42, 724);
+      context.fillText('Screen: select its partner. VR: pull and release.', 42, 752);
+    }
+
+    if (this.stitchNote === '' && this.isMemoryCard() && this.celebrating <= 0) {
+      context.fillStyle = hc ? '#ffffff' : '#ffe6b8';
+      context.font = '600 15px ui-sans-serif, system-ui, sans-serif';
+      context.fillText(
+        this.memoryPreview > 0
+          ? `Memory weave · the pattern fades in ${Math.ceil(this.memoryPreview)} s`
+          : this.memoryPeek > 0
+            ? 'Memory weave · peek'
+            : `Memory weave · from memory${this.memoryPeeks ? ` · ${this.memoryPeeks} peek${this.memoryPeeks > 1 ? 's' : ''}` : ''}`,
+        42,
+        780,
+        516,
+      );
+    } else if (this.stitchNote !== '') {
+      context.fillStyle = '#ff9a86';
+      context.font = '600 15px ui-sans-serif, system-ui, sans-serif';
+      context.fillText(this.stitchNote, 42, 780, 516);
+    } else if (
+      !free &&
+      !daily &&
+      this.cardIndex === 0 &&
+      this.drawnKeys.size === 0
+    ) {
+      context.fillStyle = hc ? '#ffffff' : '#ffe6b8';
+      context.font = '600 14px ui-sans-serif, system-ui, sans-serif';
+      context.fillText(
+        'First stitch: select the pair, or pinch and pull, then release.',
+        42,
+        780,
+        516,
+      );
     }
 
     if (this.celebrating > 0) {
@@ -1800,6 +2091,35 @@ export class LoomSystem extends createSystem({
       context.fillStyle = hc ? '#ffffff' : '#9fb6d8';
       context.font = '500 17px ui-sans-serif, system-ui, sans-serif';
       context.fillText('The tapestry sings.', width / 2, 512);
+      context.textAlign = 'left';
+    }
+
+    if (this.festivalTime > 0) {
+      context.fillStyle = hc ? '#000000' : '#080a16';
+      context.fillRect(0, 0, width, height);
+      context.textAlign = 'center';
+      context.fillStyle = hc ? '#ffffff' : '#ffd27a';
+      context.font = '700 22px ui-sans-serif, system-ui, sans-serif';
+      context.fillText('SELVEDGE HARBOR', width / 2, 200);
+      context.fillStyle = ink;
+      context.font = '700 64px Georgia, serif';
+      context.fillText('FESTIVAL', width / 2, 280);
+      context.font = '500 24px ui-sans-serif, system-ui, sans-serif';
+      context.fillStyle = hc ? '#ffffff' : '#d7e6ff';
+      context.fillText('All six archive patterns woven', width / 2, 360);
+      const minutes = (performance.now() - this.sessionStart) / 1000;
+      context.font = '500 21px ui-sans-serif, system-ui, sans-serif';
+      context.fillText(`This session: ${formatTime(minutes)}`, width / 2, 410);
+      context.fillText(
+        this.sessionPeeks === 0
+          ? 'Memory weaves: no peeks'
+          : `Memory weaves: ${this.sessionPeeks} peek${this.sessionPeeks > 1 ? 's' : ''}`,
+        width / 2,
+        448,
+      );
+      context.fillStyle = hc ? '#ffffff' : '#9fb6d8';
+      context.font = '500 18px ui-sans-serif, system-ui, sans-serif';
+      context.fillText('The whole archive sings. Tomorrow: a new Daily Weave.', width / 2, 520, 540);
       context.textAlign = 'left';
     }
 

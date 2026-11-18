@@ -214,3 +214,23 @@
   color: var(--ink);
   background: var(--sand);
 }
+#harbor-walk .field-actions {display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin:0 0 .4rem;}
+#harbor-walk .field-actions:empty {display:none;}
+#harbor-walk .field-actions button {color:var(--ink);background:var(--paper);}
+#harbor-walk select {pointer-events:auto; color:var(--paper);background:var(--ink);border:1px solid #a99075;border-radius:4px;padding:.4rem;font:inherit;}
+#harbor-walk footer {max-width:min(50rem,calc(100% - 1.2rem));}
+@media(max-width:640px){#harbor-walk .walk-route{gap:.35rem;}#harbor-walk .walk-route>button{padding:.55rem .65rem;}#harbor-walk .walk-route label{font-size:.68rem;}#harbor-walk .walk-note{font-size:.78rem;}}
+#harbor-walk button.field-pick {
+  position:fixed; transform:translate(-50%,-50%); border:0; padding:0;
+  width:clamp(34px,5.5vh,54px); height:clamp(34px,5.5vh,54px); border-radius:50%;
+  background:transparent; cursor:pointer;
+}
+#harbor-walk button.field-pick:hover,#harbor-walk button.field-pick:focus-visible{
+  outline:2px dashed #f6e0ad;outline-offset:2px;background:#c4e6d62a;
+}
+.footpath-surface {position:fixed;inset:0;pointer-events:auto;touch-action:none;cursor:grab;}
+.footpath-surface:active {cursor:grabbing;}
+#harbor-walk header,#harbor-walk footer,.field-picks,.peg-layer {position:relative;}
+#harbor-walk .footpath-pad {display:flex;justify-content:center;gap:.36rem;margin-top:.45rem;}
+#harbor-walk .footpath-pad button {touch-action:none;user-select:none;}
+#harbor-walk .footpath-pad[hidden]{display:none;}

@@ -1,3 +1,4 @@
+import { enterMixedReality } from './mixed-reality.js';
 /**
  * 2D entry screen. WebXR requires a user gesture before an immersive session
  * can start. The entry screen also opens the desktop weaving experience.
@@ -21,10 +22,11 @@ export function installEntryOverlay(world: World): void {
       <p class="entry-place">Selvedge Harbor</p>
       <h1>Loom</h1>
       <p class="subtitle">The tapestry that sings</p>
-      <p class="tagline">Weave a score from brass peg to brass peg. Light the beacon, send the cutters to sea, and listen as the harbor sings your pattern.</p>
+      <p class="tagline">On screen, select two glowing pegs. In VR, pinch a peg, pull to its partner, and release. Light the beacon, send the cutters to sea, and hear the harbor sing.</p>
       <div class="entry-actions">
         <button id="loom-preview" type="button">Play on this screen</button>
         <button id="loom-enter" type="button">Enter VR</button>
+        <button id="loom-enter-mr" type="button" hidden>Weave in your room</button>
       </div>
       <p class="status" id="loom-entry-status" role="status"></p>
       <p class="streak" id="loom-streak"></p>
@@ -53,14 +55,29 @@ export function installEntryOverlay(world: World): void {
   try {
     const raw = window.localStorage.getItem('loom.progress.v1');
     if (raw != null) {
-      const saved = JSON.parse(raw) as { streak?: unknown };
+      const saved = JSON.parse(raw) as {
+        streak?: unknown;
+        completed?: unknown;
+      };
+      const notes: string[] = [];
       if (
         typeof saved.streak === 'number' &&
         Number.isFinite(saved.streak) &&
         saved.streak > 1
       ) {
-        streakEl.textContent = `${Math.floor(saved.streak)}-day weave streak`;
+        notes.push(`${Math.floor(saved.streak)}-day weave streak`);
       }
+      if (Array.isArray(saved.completed)) {
+        const remembered = saved.completed.filter(
+          (id): id is string => typeof id === 'string',
+        ).length;
+        if (remembered > 0) {
+          notes.push(
+            `${Math.min(remembered, 6)}/6 harbor patterns remembered`,
+          );
+        }
+      }
+      if (notes.length > 0) streakEl.textContent = notes.join(' · ');
     }
   } catch {
     // The streak is a bonus; failure to read it should not block entry.
@@ -111,6 +128,22 @@ export function installEntryOverlay(world: World): void {
     }).catch(() => {});
   }
 
+  const enterMr = overlay.querySelector<HTMLButtonElement>('#loom-enter-mr')!;
+  if (world.xrEnabled && navigator.xr) {
+    void navigator.xr.isSessionSupported('immersive-ar').then(supported => {
+      enterMr.hidden = !supported;
+    }).catch(() => {});
+  }
+  enterMr.addEventListener('click', () => {
+    status.textContent = '';
+    try {
+      enterMixedReality(world);
+    } catch (error) {
+      status.textContent = 'Could not start passthrough. Open this page in Meta Quest Browser.';
+      console.warn('[loom] mixed reality launch failed', error);
+    }
+  });
+
   enter.addEventListener('click', () => {
     status.textContent = '';
     try {
@@ -145,6 +178,7 @@ export function installEntryOverlay(world: World): void {
   reset.addEventListener('click', () => {
     try {
       window.localStorage.removeItem('loom.progress.v1');
+      window.localStorage.removeItem('loom.harbor.field.v1');
     } catch {
       // Storage may be unavailable; reloading still starts a fresh session.
     }

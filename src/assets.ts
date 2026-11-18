@@ -15,7 +15,20 @@ import {
 
 import { createHarbor } from './scene-assets/harbor.scene-asset.js';
 
+import {createBellLanding, createPools, createDyeRack, createCabinet, createWestPier, createListeningPost, createRubbingTable, createBoardwalkLoop} from './scene-assets/field-stations.scene-asset.js';
+
+import {createShoal} from './scene-assets/sand-eels.scene-asset.js';
+
 export default defineAssets({
+  'silver-shoal':createShoal(),
+  'bell-landing': createBellLanding(),
+  'tide-pools': createPools(),
+  'dye-rack': createDyeRack(),
+  'conservation-cabinet': createCabinet(),
+  'west-pier': createWestPier(),
+  'listening-post': createListeningPost(),
+  'rubbing-table': createRubbingTable(),
+  'boardwalk-loop': createBoardwalkLoop(),
   'selvedge-harbor': createHarbor(),
   'loom-floor': createLoomFloor(),
   'loom-table': createLoomTable(),

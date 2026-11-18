@@ -225,6 +225,150 @@
           "intensity": 0.32
         }
       }
+    },
+    {
+      "id": "west-pier",
+      "name": "West quay",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "west-pier"
+      },
+      "transform": {
+        "position": [
+          0,
+          -0.01,
+          -3.69
+        ]
+      }
+    },
+    {
+      "id": "boardwalk-loop",
+      "name": "Boardwalk loop",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "boardwalk-loop"
+      },
+      "transform": {
+        "position": [
+          0,
+          -0.01,
+          -3.69
+        ]
+      }
+    },
+    {
+      "id": "bell-landing",
+      "name": "Bell landing",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "bell-landing"
+      },
+      "transform": {
+        "position": [
+          -1.65,
+          0,
+          -4.24
+        ]
+      }
+    },
+    {
+      "id": "tide-pools",
+      "name": "Tide pools",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "tide-pools"
+      },
+      "transform": {
+        "position": [
+          -3.76,
+          -0.02,
+          -4.21
+        ]
+      }
+    },
+    {
+      "id": "dye-rack",
+      "name": "Dye loft",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "dye-rack"
+      },
+      "transform": {
+        "position": [
+          -5.55,
+          0,
+          -4.28
+        ]
+      }
+    },
+    {
+      "id": "listening-post",
+      "name": "Listening post",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "listening-post"
+      },
+      "transform": {
+        "position": [
+          -4.75,
+          -0.02,
+          -5.0
+        ]
+      }
+    },
+    {
+      "id": "rubbing-table",
+      "name": "Rubbing table",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "rubbing-table"
+      },
+      "transform": {
+        "position": [
+          -6.0,
+          -0.02,
+          -5.0
+        ]
+      }
+    },
+    {
+      "id": "conservation-cabinet",
+      "name": "Conservation cabinet",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "conservation-cabinet"
+      },
+      "transform": {
+        "position": [
+          -7.1,
+          0,
+          -4.23
+        ]
+      }
+    },
+    {
+      "id": "silver-shoal",
+      "name": "Channel shoal",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "silver-shoal"
+      },
+      "transform": {
+        "position": [
+          0.62,
+          0,
+          -5.5
+        ]
+      }
     }
   ]
 }
