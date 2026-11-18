@@ -1457,9 +1457,14 @@ export class LoomSystem extends createSystem({
       context.fillStyle = quiet;
       context.font = '400 17px ui-sans-serif, system-ui, sans-serif';
       context.fillText(
-        daily ? 'A new pattern each day' : 'Archive pattern complete',
+        daily
+          ? 'A new pattern each day'
+          : card != null
+            ? `${card.source} · ${card.institution}`
+            : 'Archive pattern complete',
         width / 2,
         446,
+        540,
       );
       if (!daily && this.lastTime > 0) {
         const bestLine =
