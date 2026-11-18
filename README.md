@@ -14,7 +14,7 @@ card adds a harder shape. After three cards the board opens into Free Weave.
 
 - Hands only: no controllers, menus, locomotion, or buttons in VR
 - Seated: every peg sits inside a two-foot reach
-- Runs in Meta Quest Browser and Meta VR Glasses Browser (WebXR)
+- Runs in Meta Quest Browser over WebXR
 - Procedural art and synthesized audio: no downloaded models or textures
 
 ## Controls
