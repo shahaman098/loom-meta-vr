@@ -14,6 +14,11 @@ export const Peg = createComponent('Peg', {
 });
 
 /** Observable state for debugging and evidence. */
+export const HarborDiscovery = createComponent('HarborDiscovery', {
+  poolNotes: { type: Types.Int32, default: 0 },
+  inspectedFragments: { type: Types.Int32, default: 0 },
+});
+
 export const LoomStatus = createComponent('LoomStatus', {
   cardIndex: { type: Types.Int32, default: 0 },
   totalCards: { type: Types.Int32, default: 6 },
@@ -21,6 +26,9 @@ export const LoomStatus = createComponent('LoomStatus', {
   mode: { type: Types.String, default: 'card' },
   streak: { type: Types.Int32, default: 0 },
   highContrast: { type: Types.Boolean, default: false },
+  strums: { type: Types.Int32, default: 0 },
+  harborStitches: { type: Types.Int32, default: 0 },
+  ternsVisible: { type: Types.Boolean, default: false },
   drawnEdges: { type: Types.Int32, default: 0 },
   activePeg: { type: Types.Int32, default: -1 },
   targetPeg: { type: Types.Int32, default: -1 },
@@ -31,4 +39,4 @@ export const LoomStatus = createComponent('LoomStatus', {
   lastTo: { type: Types.Int32, default: -1 },
 });
 
-export default defineComponents([Peg, LoomStatus]);
+export default defineComponents([Peg, LoomStatus, HarborDiscovery]);

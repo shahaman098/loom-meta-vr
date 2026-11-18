@@ -1,145 +1,39 @@
 /**
  * 2D entry screen. WebXR requires a user gesture before an immersive session
- * can start, and the experience itself has no 2D controls, so the page needs
- * one clear "Enter VR" action before handing over to the loom.
+ * can start. The entry screen also opens the desktop weaving experience.
  */
 
+import './harbor.css';
 import { VisibilityState } from '@iwsdk/core';
 import type { World } from '@iwsdk/core';
 
-const STYLE_ID = 'loom-entry-style';
-
-function injectStyle(): void {
-  if (document.getElementById(STYLE_ID) != null) {
-    return;
-  }
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = `
-    #loom-entry {
-      position: fixed;
-      inset: 0;
-      z-index: 20;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 22px;
-      background:
-        radial-gradient(circle at 50% 42%, rgba(46, 78, 128, 0.38), transparent 58%),
-        radial-gradient(circle at 50% 100%, rgba(255, 176, 92, 0.10), transparent 46%),
-        #05080f;
-      color: #f4e6c9;
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-      text-align: center;
-      padding: 32px;
-      transition: opacity 320ms ease;
-    }
-    #loom-entry .eyebrow {
-      font-size: 12px;
-      letter-spacing: 0.34em;
-      text-transform: uppercase;
-      color: #7e93b6;
-    }
-    #loom-entry h1 {
-      margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
-      font-size: clamp(64px, 14vw, 132px);
-      line-height: 0.9;
-      letter-spacing: 0.02em;
-      color: #f4e6c9;
-      text-shadow: 0 0 42px rgba(255, 192, 106, 0.18);
-    }
-    #loom-entry .tagline {
-      margin: 0;
-      max-width: 520px;
-      font-size: 17px;
-      line-height: 1.55;
-      color: #a9bbd6;
-    }
-    #loom-entry .rule {
-      width: min(320px, 60vw);
-      height: 1px;
-      background: linear-gradient(90deg, transparent, #5ce1e6, #ffc06a, transparent);
-      opacity: 0.7;
-    }
-    #loom-entry button {
-      appearance: none;
-      border: 1px solid rgba(255, 192, 106, 0.65);
-      background: rgba(255, 192, 106, 0.08);
-      color: #ffe6b8;
-      font: 600 16px/1 ui-sans-serif, system-ui, sans-serif;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      padding: 18px 38px;
-      border-radius: 999px;
-      cursor: pointer;
-      transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
-    }
-    #loom-entry button:hover {
-      background: rgba(255, 192, 106, 0.18);
-      transform: translateY(-1px);
-      box-shadow: 0 10px 34px rgba(255, 176, 92, 0.16);
-    }
-    #loom-entry button:active {
-      transform: translateY(0);
-    }
-    #loom-entry .quiet {
-      appearance: none;
-      border: 0;
-      background: transparent;
-      color: #6f84a8;
-      font: 500 13px/1 ui-sans-serif, system-ui, sans-serif;
-      letter-spacing: 0.08em;
-      text-transform: none;
-      padding: 6px 10px;
-      cursor: pointer;
-      text-decoration: underline;
-      text-underline-offset: 4px;
-    }
-    #loom-entry .foot {
-      font-size: 12px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #54688a;
-    }
-    #loom-entry .status {
-      min-height: 18px;
-      font-size: 13px;
-      color: #ffb35c;
-    }
-    #loom-entry .streak {
-      min-height: 16px;
-      font-size: 13px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #ffc06a;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
 export function installEntryOverlay(world: World): void {
-  injectStyle();
+  const menuCamera = () => {
+    if (world.session) return;
+    world.camera.position.set(-1.55, 1.38, 1.85);
+    world.camera.lookAt(.38, 1.18, -3.8);
+  };
 
   const overlay = document.createElement('div');
   overlay.id = 'loom-entry';
   overlay.innerHTML = `
-    <div class="eyebrow">Meta VR Start 2026</div>
-    <h1>LOOM</h1>
-    <p class="tagline">
-      Pinch a brass peg. Pull a glowing thread. Release.
-      Weave a living tapestry that sings — every pattern is a melody.
-      No controllers, no menus.
-    </p>
-    <div class="rule"></div>
-    <button id="loom-enter" type="button">Enter VR</button>
-    <div class="status" id="loom-entry-status"></div>
-    <div class="streak" id="loom-streak"></div>
-    <div class="foot">Seated &middot; Hands only &middot; 5&ndash;10 minutes</div>
-    <button class="quiet" id="loom-preview" type="button">Preview on this screen</button>
-    <button class="quiet" id="loom-contrast" type="button">High contrast: off</button>
-    <button class="quiet" id="loom-reset" type="button">Reset progress</button>
+    <main class="entry-card">
+      <p class="entry-place">Selvedge Harbor</p>
+      <h1>Loom</h1>
+      <p class="subtitle">The tapestry that sings</p>
+      <p class="tagline">Weave a score from brass peg to brass peg. Light the beacon, send the cutters to sea, and listen as the harbor sings your pattern.</p>
+      <div class="entry-actions">
+        <button id="loom-preview" type="button">Play on this screen</button>
+        <button id="loom-enter" type="button">Enter VR</button>
+      </div>
+      <p class="status" id="loom-entry-status" role="status"></p>
+      <p class="streak" id="loom-streak"></p>
+      <div class="entry-settings">
+        <button id="loom-contrast" type="button">High contrast</button>
+        <button id="loom-demo" type="button" hidden>Free Weave demo</button>
+        <button id="loom-reset" type="button">Reset progress</button>
+      </div>
+    </main>
   `;
   document.body.appendChild(overlay);
 
@@ -147,7 +41,14 @@ export function installEntryOverlay(world: World): void {
   const preview = overlay.querySelector<HTMLButtonElement>('#loom-preview')!;
   const contrast = overlay.querySelector<HTMLButtonElement>('#loom-contrast')!;
   const reset = overlay.querySelector<HTMLButtonElement>('#loom-reset')!;
+  const demo = overlay.querySelector<HTMLButtonElement>('#loom-demo')!;
   const status = overlay.querySelector<HTMLDivElement>('#loom-entry-status')!;
+  if (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  ) {
+    demo.hidden = false;
+  }
   const streakEl = overlay.querySelector<HTMLDivElement>('#loom-streak')!;
   try {
     const raw = window.localStorage.getItem('loom.progress.v1');
@@ -195,22 +96,19 @@ export function installEntryOverlay(world: World): void {
       window.clearTimeout(hideTimer);
       hideTimer = null;
     }
-    overlay.style.display = 'flex';
+    overlay.style.display = '';
+    menuCamera();
     overlay.style.pointerEvents = 'auto';
     overlay.style.opacity = '1';
   };
 
-  const hasXR =
-    typeof navigator !== 'undefined' &&
-    'xr' in navigator &&
-    (navigator as Navigator & { xr?: unknown }).xr != null;
-
-  if (!world.xrEnabled || !hasXR) {
-    enter.textContent = 'Open on Meta Quest';
-    status.textContent = hasXR
-      ? 'This build has XR disabled.'
-      : 'VR needs Meta Quest Browser or another WebXR browser.';
-    preview.textContent = 'Preview the loom on this screen';
+  // XR support depends on the device even when navigator.xr exists.
+  enter.hidden = true;
+  if (world.xrEnabled && navigator.xr) {
+    void navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+      enter.hidden = !supported;
+      if (supported) enter.parentElement!.prepend(enter);
+    }).catch(() => {});
   }
 
   enter.addEventListener('click', () => {
@@ -225,6 +123,7 @@ export function installEntryOverlay(world: World): void {
 
   preview.addEventListener('click', () => {
     hide();
+    window.dispatchEvent(new Event('loom-play'));
   });
 
   contrast.addEventListener('click', () => {
@@ -239,6 +138,10 @@ export function installEntryOverlay(world: World): void {
     window.location.reload();
   });
 
+  demo.addEventListener('click', () => {
+    window.location.search = '?demo=free';
+  });
+
   reset.addEventListener('click', () => {
     try {
       window.localStorage.removeItem('loom.progress.v1');
@@ -248,10 +151,12 @@ export function installEntryOverlay(world: World): void {
     window.location.reload();
   });
 
+  window.addEventListener('loom-menu', () => { show(); preview.focus(); });
   const onVisibility = (visibilityState: VisibilityState) => {
     if (visibilityState === VisibilityState.NonImmersive) {
       show();
     } else {
+      window.dispatchEvent(new Event('loom-close-walk'));
       hide();
     }
   };

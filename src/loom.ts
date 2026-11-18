@@ -24,6 +24,8 @@ import {
   createSystem,
 } from '@iwsdk/core';
 import type { Entity, Object3D } from '@iwsdk/core';
+import { Harbor } from './harbor.js';
+import { HarborWalk } from './harbor-walk.js';
 import { LoomStatus, Peg } from './components.js';
 import { PEG_TIP_COLOR, createPeg } from './scene-assets/loom.scene-asset.js';
 
@@ -207,6 +209,7 @@ const formatTime = (seconds: number): string => {
 };
 
 type SavedProgress = {
+  lastFlag?: Array<[number, number]>;
   completed: string[];
   dailyDate: string;
   bestTimes: Record<string, number>;
@@ -237,7 +240,12 @@ const loadSaved = (): SavedProgress => {
         }
       }
     }
+    const lastFlag = Array.isArray(parsed.lastFlag) && parsed.lastFlag.length <= 72 &&
+      parsed.lastFlag.every(edge => Array.isArray(edge) && edge.length === 2 &&
+        edge[0] !== edge[1] && edge.every(i => Number.isInteger(i) && i >= 0 && i < ROWS * COLS))
+      ? parsed.lastFlag : undefined;
     return {
+      lastFlag,
       completed: Array.isArray(parsed.completed)
         ? parsed.completed.filter((id): id is string => typeof id === 'string')
         : [],
@@ -283,6 +291,7 @@ type Segment = {
   mesh: Mesh;
   key: string;
   color: number;
+  material: MeshStandardMaterial;
 };
 
 export class LoomSystem extends createSystem({
@@ -334,6 +343,9 @@ export class LoomSystem extends createSystem({
   private hintMaterial!: MeshStandardMaterial;
   private hintPegA = -1;
   private hintPegB = -1;
+  private strumCooldown = 0;
+  private strumCount = 0;
+  private demoFree = false;
   private drawnKeys = new Set<string>();
   private segmentKeys: string[] = [];
   private segmentColors: number[] = [];
@@ -347,6 +359,9 @@ export class LoomSystem extends createSystem({
   private tmpQuaternion = new Quaternion();
   private tmpTip = new Vector3();
 
+  private concertTime = 0;
+  private harbor!: Harbor;
+  private walk!: HarborWalk;
   private audio: AudioContext | null = null;
 
   init(): void {
@@ -369,6 +384,29 @@ export class LoomSystem extends createSystem({
     this.createThreads();
     this.createCard();
     this.createProgressStrip();
+    this.harbor = new Harbor(this.world.requireSceneEntity('selvedge-harbor').object3D!,
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    this.walk = new HarborWalk(this.world, this.pegs.map(peg => peg.tip), (from, to) => {
+      if (this.celebrating > 0) return;
+      this.ensureAudio();
+      this.lastFrom = from;
+      this.lastTo = to;
+      this.addSegment(from, to);
+      this.cardDirty = true;
+    }, () => {
+      const concert = this.latestArchiveCard();
+      if (!concert || this.concertTime > 0) return 0;
+      this.ensureAudio();
+      this.playMelody(concert.melody);
+      this.concertTime = concert.melody.length * .22 + .5;
+      this.harbor.stitchFlag(this.saved.lastFlag ?? concert.edges);
+      this.harbor.setScore(3, true);
+      return this.concertTime;
+    });
+    this.updateHarbor();
+    this.syncStatus();
+    if (this.demoFree) this.seedDemoTapestry();
+    this.cleanupFuncs.push(() => { this.walk.dispose(); this.harbor.dispose(); });
 
     const offGrab = this.queries.held.subscribe('qualify', (entity) => {
       this.onGrab(entity);
@@ -465,10 +503,12 @@ export class LoomSystem extends createSystem({
     );
 
     for (let i = 0; i < 72; i += 1) {
-      const mesh = new Mesh(geometry, this.threadMaterials[0]);
+      const material = this.threadMaterials[0].clone();
+      const mesh = new Mesh(geometry, material);
       mesh.scale.set(0, 0, 0);
       this.world.createTransformEntity(mesh, { parent: this.boardEntity });
-      this.segments.push({ mesh, key: '', color: 0 });
+      mesh.visible = false;
+      this.segments.push({ mesh, key: '', color: 0, material });
     }
 
     this.liveMaterial = new MeshStandardMaterial({
@@ -548,6 +588,20 @@ export class LoomSystem extends createSystem({
     }
     this.saved = loadSaved();
     this.completedCards = new Set(this.saved.completed);
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('demo') === 'free') {
+        this.demoFree = true;
+        this.completedCards = new Set(CARDS.map((card) => card.id));
+        this.cardIndex = CARDS.length;
+        this.dailyMode = false;
+        this.freeMode = true;
+        this.cardStart = performance.now();
+        return;
+      }
+    } catch {
+      // A malformed query should never stop the normal load path.
+    }
     const firstIncomplete = CARDS.findIndex(
       (card) => !this.completedCards.has(card.id),
     );
@@ -572,6 +626,7 @@ export class LoomSystem extends createSystem({
   private saveProgress(): void {
     this.saved = {
       completed: Array.from(this.completedCards),
+      lastFlag: this.saved.lastFlag,
       dailyDate: this.saved.dailyDate,
       bestTimes: this.saved.bestTimes,
       streak: this.saved.streak,
@@ -611,6 +666,7 @@ export class LoomSystem extends createSystem({
       return;
     }
     this.completedCards.add(card.id);
+    this.saved.lastFlag = this.flagEdges();
     this.saveProgress();
     this.renderProgressTiles();
   }
@@ -710,6 +766,23 @@ export class LoomSystem extends createSystem({
       melody,
       edges,
     };
+  }
+
+  private seedDemoTapestry(): void {
+    const edges: Array<[number, number]> = [
+      [2, 0],
+      [0, 10],
+      [10, 12],
+      [12, 24],
+      [24, 4],
+      [4, 14],
+      [14, 22],
+      [22, 20],
+      [20, 2],
+    ];
+    for (const [a, b] of edges) {
+      this.addSegment(a, b);
+    }
   }
 
   private createProgressStrip(): void {
@@ -869,6 +942,7 @@ export class LoomSystem extends createSystem({
       'highContrast',
       this.highContrast,
     );
+    this.boardEntity.setValue(LoomStatus, 'strums', this.strumCount);
     this.boardEntity.setValue(
       LoomStatus,
       'drawnEdges',
@@ -915,7 +989,12 @@ export class LoomSystem extends createSystem({
       (this.cardIndex * 2 + this.segmentKeys.length) % THREAD_COLORS.length;
     slot.key = key;
     slot.color = color;
-    slot.mesh.material = this.threadMaterials[color];
+    const base = this.threadMaterials[color];
+    slot.material.color.copy(base.color);
+    slot.material.emissive.copy(base.emissive);
+    slot.material.emissiveIntensity = base.emissiveIntensity;
+    slot.mesh.material = slot.material;
+    slot.mesh.visible = true;
     this.setSegmentBetween(
       slot.mesh,
       this.pegByIndex.get(from)!.position,
@@ -954,7 +1033,41 @@ export class LoomSystem extends createSystem({
     this.missStreak = 0;
     this.assistTimer = 0;
     this.idleTimer = 0;
+    this.updateHarbor();
     this.syncStatus();
+  }
+
+  private flagEdges(): Array<[number, number]> {
+    return this.segmentKeys.map(key => {
+      const [from, to] = key.split(':');
+      return [Number(from), Number(to)];
+    });
+  }
+
+  private latestArchiveCard(): CardDef | undefined {
+    const ids = this.saved.completed;
+    return CARDS.find(card => card.id === ids[ids.length - 1]);
+  }
+
+  private updateHarbor(): void {
+    const card = this.activeCard();
+    const correct = card
+      ? card.edges.filter(([a,b]) => this.drawnKeys.has(edgeKey(a,b))).length
+      : this.drawnKeys.size;
+    const finished = this.celebrating > 0 || (this.freeMode && correct >= 3);
+    const lastCard = this.latestArchiveCard();
+    const flagEdges = this.segmentKeys.length
+      ? this.flagEdges()
+      : this.saved.lastFlag ?? lastCard?.edges ?? [];
+    this.harbor.stitchFlag(flagEdges);
+    if (this.concertTime <= 0) this.harbor.setScore(correct, finished);
+    const next = card?.edges.find(([a,b]) => !this.drawnKeys.has(edgeKey(a,b)));
+    const goal = next ? 'Next: peg ' + (next[0]+1) + ' to ' + (next[1]+1) : '';
+    const state = finished ? 'The terns have returned' : correct >= 2
+      ? 'Cutters under sail' : correct === 1 ? 'Beacon lit' : 'Light the beacon';
+    this.walk.setScore(card?.title ?? 'Free weave', [state,goal].filter(Boolean).join(' · '), lastCard?.melodyTitle ?? '', next);
+    this.boardEntity.setValue(LoomStatus, 'harborStitches', correct);
+    this.boardEntity.setValue(LoomStatus, 'ternsVisible', finished);
   }
 
   private isCardComplete(card: CardDef): boolean {
@@ -996,6 +1109,7 @@ export class LoomSystem extends createSystem({
       this.segmentColors.length = 0;
       for (const segment of this.segments) {
         segment.key = '';
+        segment.mesh.visible = false;
         segment.mesh.scale.set(0, 0, 0);
       }
     }
@@ -1005,6 +1119,78 @@ export class LoomSystem extends createSystem({
     this.idleTimer = 0;
     this.hideHint();
     this.cardDirty = true;
+    this.updateHarbor();
+    this.syncStatus();
+  }
+
+  private distanceToSegment(
+    x: number,
+    y: number,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+  ): number {
+    const abx = bx - ax;
+    const aby = by - ay;
+    const lengthSquared = abx * abx + aby * aby;
+    let t = 0;
+    if (lengthSquared > 0.0000001) {
+      t = ((x - ax) * abx + (y - ay) * aby) / lengthSquared;
+      t = Math.max(0, Math.min(1, t));
+    }
+    const dx = x - (ax + abx * t);
+    const dy = y - (ay + aby * t);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  private updateStrum(delta: number): void {
+    if (this.strumCooldown > 0) {
+      this.strumCooldown -= delta;
+      return;
+    }
+    let best: Segment | null = null;
+    let bestDistance = 0.028;
+    for (const hand of ['right', 'left'] as const) {
+      if (!this.handLocal(hand, this.tmpHand)) {
+        continue;
+      }
+      if (this.tmpHand.z < -0.03 || this.tmpHand.z > 0.5) {
+        continue;
+      }
+      for (const segment of this.segments) {
+        if (segment.key === '') {
+          continue;
+        }
+        const [a, b] = segment.key.split(':').map(Number);
+        const from = this.pegByIndex.get(a);
+        const to = this.pegByIndex.get(b);
+        if (from == null || to == null) {
+          continue;
+        }
+        const distance = this.distanceToSegment(
+          this.tmpHand.x,
+          this.tmpHand.y,
+          from.position.x,
+          from.position.y,
+          to.position.x,
+          to.position.y,
+        );
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = segment;
+        }
+      }
+    }
+    if (best == null) {
+      return;
+    }
+    const scale = [60, 62, 64, 67, 69, 72, 74, 76];
+    this.playMidi(scale[best.color % scale.length], 0.05, 0, 0.35);
+    best.material.emissiveIntensity = 6;
+    best.material.emissive.setHex(0xffffff);
+    this.strumCooldown = 0.16;
+    this.strumCount += 1;
     this.syncStatus();
   }
 
@@ -1149,6 +1335,11 @@ export class LoomSystem extends createSystem({
   }
 
   update(delta: number, time: number): void {
+    this.harbor.update(delta);
+    if (this.concertTime > 0) {
+      this.concertTime -= delta;
+      if (this.concertTime <= 0) this.updateHarbor();
+    }
     if (this.assistTimer > 0) {
       this.assistTimer -= delta;
     }
@@ -1181,6 +1372,30 @@ export class LoomSystem extends createSystem({
           this.updateHint(time);
         } else {
           this.hideHint();
+        }
+      }
+    }
+    if (
+      this.freeMode &&
+      this.world.session != null &&
+      this.activePegIndex < 0
+    ) {
+      this.updateStrum(delta);
+    } else {
+      this.strumCooldown = 0;
+    }
+    for (const segment of this.segments) {
+      if (segment.key === '') {
+        continue;
+      }
+      const base = this.highContrast ? 4.6 : 3.2;
+      if (segment.material.emissiveIntensity > base + 0.01) {
+        segment.material.emissiveIntensity = Math.max(
+          base,
+          segment.material.emissiveIntensity - delta * 18,
+        );
+        if (segment.material.emissiveIntensity <= base + 0.01) {
+          segment.material.emissive.set(THREAD_COLORS[segment.color]);
         }
       }
     }
@@ -1537,8 +1752,8 @@ export class LoomSystem extends createSystem({
     context.fillStyle = quiet;
     context.font = '400 18px ui-sans-serif, system-ui, sans-serif';
     if (free) {
-      context.fillText('Free Weave. No card. No timer.', 42, 724);
-      context.fillText('Keep pulling threads through the pegs.', 42, 752);
+      context.fillText('Free Weave. Pinch to add threads.', 42, 724);
+      context.fillText('Sweep your hand across the threads to play.', 42, 752, 516);
     } else if (daily) {
       context.fillText('Pinch a brass peg.', 42, 724);
       context.fillText('Pull to another peg, then release.', 42, 752);

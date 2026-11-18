@@ -4,24 +4,24 @@
   "components": {
     "com.iwsdk.components.DomeGradient": {
       "sky": [
-        0.025,
-        0.04,
-        0.09,
+        0.105,
+        0.215,
+        0.32,
         1
       ],
       "equator": [
-        0.07,
-        0.1,
-        0.19,
+        0.93,
+        0.54,
+        0.4,
         1
       ],
       "ground": [
-        0.01,
-        0.012,
-        0.025,
+        0.16,
+        0.235,
+        0.26,
         1
       ],
-      "elevationDeg": 18,
+      "elevationDeg": 9,
       "azimuthDeg": -28,
       "dither": true
     },
@@ -56,6 +56,15 @@
   "resources": {},
   "nodes": [
     {
+      "id": "selvedge-harbor",
+      "name": "Selvedge Harbor",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "selvedge-harbor"
+      }
+    },
+    {
       "id": "loom-floor",
       "name": "Floor",
       "framingRole": "support",
@@ -69,6 +78,18 @@
           "start": 3,
           "end": 11
         }
+      },
+      "transform": {
+        "scale": [
+          0.062,
+          1,
+          0.062
+        ],
+        "position": [
+          0,
+          -0.12,
+          0
+        ]
       }
     },
     {

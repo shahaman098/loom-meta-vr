@@ -13,7 +13,10 @@ import {
   createLoomTable,
 } from './scene-assets/loom.scene-asset.js';
 
+import { createHarbor } from './scene-assets/harbor.scene-asset.js';
+
 export default defineAssets({
+  'selvedge-harbor': createHarbor(),
   'loom-floor': createLoomFloor(),
   'loom-table': createLoomTable(),
   'loom-board': createLoomBoard(),
