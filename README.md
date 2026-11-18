@@ -9,15 +9,18 @@ Developer Competition 2026**.
 Loom puts a small walnut loom on the table in front of you, strung with 25 brass
 pegs. Pinch a peg, pull a glowing thread to another peg, and release. The thread
 snaps into place and stays woven into the board. Six pattern cards are drawn from
-real textile archives; each card carries its source, date, institution and
-public-domain status. Finish a card and the tapestry flashes with a chord, a
-woven tile appears on the top rail, and the next card adds a harder shape. A
-date-seeded **Daily Weave** follows the archive, then **Free Weave**.
+real textile archives; each card carries its source, date, institution,
+public-domain status and a public-domain melody. Every anchored thread plays a
+note; finishing a card performs the full tune. The tapestry is the score, the
+loom is the instrument. Finish a card and a woven tile appears on the top rail,
+then the next card adds a harder shape. A date-seeded **Daily Weave** follows
+the archive, then **Free Weave**.
 
 - Hands only: no controllers, menus, locomotion, or buttons in VR
 - Seated: every peg sits inside a two-foot reach
 - Runs in Meta Quest Browser over WebXR
 - Six archive cards with real provenance; daily weave; local progression
+- Every pattern is a public-domain melody; threads play notes and completion performs the tune
 - Procedural stage and synthesized audio; six public-domain archive photographs
 - Assist: after two missed releases, the peg target widens briefly
 - Idle hint thread and next-peg glow after 12 seconds without a weave

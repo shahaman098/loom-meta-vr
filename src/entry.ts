@@ -129,7 +129,8 @@ export function installEntryOverlay(world: World): void {
     <h1>LOOM</h1>
     <p class="tagline">
       Pinch a brass peg. Pull a glowing thread. Release.
-      Weave a living tapestry with your hands — no controllers, no menus.
+      Weave a living tapestry that sings — every pattern is a melody.
+      No controllers, no menus.
     </p>
     <div class="rule"></div>
     <button id="loom-enter" type="button">Enter VR</button>

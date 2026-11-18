@@ -57,6 +57,9 @@ type CardDef = {
   institution: string;
   license: string;
   image?: string;
+  melodyTitle: string;
+  melodySource: string;
+  melody: number[];
   edges: Array<[number, number]>;
 };
 
@@ -72,6 +75,9 @@ const CARDS: CardDef[] = [
     institution: 'The Metropolitan Museum of Art',
     license: 'CC0',
     image: archiveImage('coptic.jpg'),
+    melodyTitle: 'Ode to Joy',
+    melodySource: 'Beethoven, public domain',
+    melody: [64,64,65,67,67,65,64,62,60,60,62,64,64,62,62],
     edges: [
       [ENTRY_PEG, 0 * COLS + 0],
       [0 * COLS + 0, 2 * COLS + 0],
@@ -86,6 +92,9 @@ const CARDS: CardDef[] = [
     institution: 'Aga Khan Museum',
     license: 'Public domain',
     image: archiveImage('ottoman.jpg'),
+    melodyTitle: 'Greensleeves',
+    melodySource: 'Traditional English, public domain',
+    melody: [57,60,62,64,65,64,62,59,55,57,59,60,57,57],
     edges: [
       [ENTRY_PEG, 0 * COLS + 4],
       [0 * COLS + 4, 2 * COLS + 4],
@@ -102,6 +111,9 @@ const CARDS: CardDef[] = [
     institution: 'Cooper Hewitt',
     license: 'Public domain',
     image: archiveImage('japan.jpg'),
+    melodyTitle: 'Sakura Sakura',
+    melodySource: 'Traditional Japanese, public domain',
+    melody: [69,69,71,69,69,71,69,71,72,71,69,67,69],
     edges: [
       [ENTRY_PEG, 0 * COLS + 4],
       [0 * COLS + 4, 2 * COLS + 3],
@@ -118,6 +130,9 @@ const CARDS: CardDef[] = [
     institution: 'Google Art Project',
     license: 'Public domain',
     image: archiveImage('italy.jpg'),
+    melodyTitle: 'La Folia',
+    melodySource: 'Traditional European, public domain',
+    melody: [69,69,71,72,74,72,71,69,67,69,71,72,74,72,71,69],
     edges: [
       [ENTRY_PEG, 0 * COLS + 4],
       [0 * COLS + 4, 4 * COLS + 4],
@@ -134,6 +149,9 @@ const CARDS: CardDef[] = [
     institution: 'The Metropolitan Museum of Art',
     license: 'CC0',
     image: archiveImage('quilt2.jpg'),
+    melodyTitle: 'Amazing Grace',
+    melodySource: 'Traditional, public domain',
+    melody: [67,72,76,72,76,74,72,69,67,69,72,69,67,67],
     edges: [
       [ENTRY_PEG, 0 * COLS + 0],
       [0 * COLS + 0, 4 * COLS + 0],
@@ -151,6 +169,9 @@ const CARDS: CardDef[] = [
     institution: 'Cooper Hewitt',
     license: 'Public domain',
     image: archiveImage('peru2.jpg'),
+    melodyTitle: 'Andean Pentatonic',
+    melodySource: 'Traditional Andean, public domain',
+    melody: [62,64,67,69,72,69,67,64,62,64,67,72],
     edges: [
       [ENTRY_PEG, 0 * COLS + 0],
       [0 * COLS + 0, 0 * COLS + 1],
@@ -657,6 +678,11 @@ export class LoomSystem extends createSystem({
       col = nextCol;
     }
 
+    const scale = [60, 62, 64, 67, 69, 72, 74, 76];
+    const melody = Array.from({ length: 8 }, () => {
+      return scale[Math.floor(random() * scale.length)];
+    });
+
     if (edges.length < 4) {
       return {
         id: `daily-${todayKey()}`,
@@ -665,6 +691,9 @@ export class LoomSystem extends createSystem({
         date: todayKey(),
         institution: 'Loom',
         license: 'Today only',
+        melodyTitle: "Today's melody",
+        melodySource: 'Generated from the date',
+        melody,
         edges: CARDS[2].edges,
       };
     }
@@ -676,6 +705,9 @@ export class LoomSystem extends createSystem({
       date: todayKey(),
       institution: 'Loom',
       license: 'Today only',
+      melodyTitle: "Today's melody",
+      melodySource: 'Generated from the date',
+      melody,
       edges,
     };
   }
@@ -771,7 +803,11 @@ export class LoomSystem extends createSystem({
     this.idleTimer = 0;
     this.hideHint();
     this.ensureAudio();
-    this.playPluck(chosen, 0.05);
+    this.playPluck(
+      chosen,
+      0.05,
+      this.activeCard()?.melody?.[0],
+    );
     this.cardDirty = true;
     this.syncStatus();
   }
@@ -889,7 +925,14 @@ export class LoomSystem extends createSystem({
     this.drawnKeys.add(key);
     this.segmentKeys.push(key);
     this.segmentColors.push(color);
-    this.playPluck(to, 0.06);
+    const melody = this.activeCard()?.melody;
+    this.playPluck(
+      to,
+      0.06,
+      melody != null
+        ? melody[(this.segmentKeys.length - 1) % melody.length]
+        : undefined,
+    );
 
     const active = this.activeCard();
     if (
@@ -901,7 +944,11 @@ export class LoomSystem extends createSystem({
     ) {
       this.markCompleted(active);
       this.celebrating = 3.6;
-      this.playChord();
+      if (active.melody.length > 0) {
+        this.playMelody(active.melody);
+      } else {
+        this.playChord();
+      }
       this.cardDirty = true;
     }
     this.missStreak = 0;
@@ -1201,14 +1248,21 @@ export class LoomSystem extends createSystem({
     }
   }
 
-  private playPluck(pegIndex: number, volume: number): void {
+  private playPluck(
+    pegIndex: number,
+    volume: number,
+    midi?: number,
+  ): void {
     const context = this.audio;
     if (context == null) {
       return;
     }
     const scale = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
     const semitone = scale[pegIndex % scale.length];
-    const frequency = 196 * Math.pow(2, semitone / 12);
+    const frequency =
+      midi != null
+        ? 440 * Math.pow(2, (midi - 69) / 12)
+        : 196 * Math.pow(2, semitone / 12);
     const now = context.currentTime;
     const oscillator = context.createOscillator();
     const gain = context.createGain();
@@ -1220,6 +1274,36 @@ export class LoomSystem extends createSystem({
     oscillator.connect(gain).connect(context.destination);
     oscillator.start(now);
     oscillator.stop(now + 0.58);
+  }
+
+  private playMidi(
+    midi: number,
+    volume: number,
+    when = 0,
+    duration = 0.55,
+  ): void {
+    const context = this.audio;
+    if (context == null) {
+      return;
+    }
+    const start = context.currentTime + when;
+    const frequency = 440 * Math.pow(2, (midi - 69) / 12);
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.02);
+  }
+
+  private playMelody(notes: number[]): void {
+    notes.forEach((note, index) => {
+      this.playMidi(note, 0.045, index * 0.22, 0.5);
+    });
   }
 
   private playChord(): void {
@@ -1437,6 +1521,19 @@ export class LoomSystem extends createSystem({
       context.fillText(`${card.source} · ${card.license}`, 42, 672, 516);
     }
 
+    context.fillStyle = bodyInk;
+    context.font = '400 14px ui-sans-serif, system-ui, sans-serif';
+    if (free) {
+      context.fillText('Every pattern is a melody.', 42, 696, 516);
+    } else if (card != null) {
+      context.fillText(
+        `Melody: ${card.melodyTitle} · ${card.melodySource}`,
+        42,
+        696,
+        516,
+      );
+    }
+
     context.fillStyle = quiet;
     context.font = '400 18px ui-sans-serif, system-ui, sans-serif';
     if (free) {
@@ -1485,6 +1582,9 @@ export class LoomSystem extends createSystem({
           480,
         );
       }
+      context.fillStyle = hc ? '#ffffff' : '#9fb6d8';
+      context.font = '500 17px ui-sans-serif, system-ui, sans-serif';
+      context.fillText('The tapestry sings.', width / 2, 512);
       context.textAlign = 'left';
     }
 
