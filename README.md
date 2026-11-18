@@ -8,14 +8,19 @@ Developer Competition 2026**.
 
 Loom puts a small walnut loom on the table in front of you, strung with 25 brass
 pegs. Pinch a peg, pull a glowing thread to another peg, and release. The thread
-snaps into place and stays woven into the board. Each pattern card asks for a few
-connected threads; finish it and the tapestry flashes with a chord, then the next
-card adds a harder shape. After three cards the board opens into Free Weave.
+snaps into place and stays woven into the board. Six pattern cards are drawn from
+real textile archives; each card carries its source, date, institution and
+public-domain status. Finish a card and the tapestry flashes with a chord, a
+woven tile appears on the top rail, and the next card adds a harder shape. A
+date-seeded **Daily Weave** follows the archive, then **Free Weave**.
 
 - Hands only: no controllers, menus, locomotion, or buttons in VR
 - Seated: every peg sits inside a two-foot reach
 - Runs in Meta Quest Browser over WebXR
-- Procedural art and synthesized audio: no downloaded models or textures
+- Six archive cards with real provenance; daily weave; local progression
+- Procedural stage and synthesized audio; six public-domain archive photographs
+- Assist: after two missed releases, the peg target widens briefly
+- Hand tracking is requested as optional; controller squeeze is a fallback
 
 ## Controls
 
@@ -55,8 +60,9 @@ https://loom-meta-vr.pages.dev.
 ## How it works
 
 - `src/scene-assets/loom.scene-asset.ts` — table, frame, warp, pegs, card, floor
-- `src/loom.ts` — peg targeting, live thread, woven segments, pattern cards,
-  completion, Free Weave, Web Audio plucks and chords
+- `src/loom.ts` — peg targeting, live thread, woven segments, six archive cards,
+  daily weave, persistence, progress tiles, assist, Free Weave, Web Audio
+  plucks and chords
 - `src/entry.ts` — the 2D **Enter VR** screen required by WebXR's user gesture
 - `src/components.ts` — `Peg` grid coordinates and observable `LoomStatus`
 - `public/scenes/main.iwsdk.scene.json` — authored composition and lighting
@@ -65,7 +71,8 @@ The fingertip is the cursor: a pinch selects the nearest peg to the hand, so the
 thread starts where the player aims rather than where a grab collider happened to
 land. Woven cords are lifted just in front of the peg tips so they read against
 the felt. Pattern cards are painted to a `CanvasTexture` at runtime; audio is
-synthesized with the Web Audio API.
+synthesized with the Web Audio API. Archive images and attribution are in
+[`../ARCHIVE.md`](../ARCHIVE.md).
 
 ## Evidence
 

@@ -426,6 +426,13 @@ export class LoomSystem extends createSystem({
   }
 
   private loadProgress(): void {
+    try {
+      if (new URLSearchParams(window.location.search).has('reset')) {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch {
+      // Storage may be unavailable in a sandboxed preview; the game still runs.
+    }
     this.saved = loadSaved();
     this.completedCards = new Set(this.saved.completed);
     const firstIncomplete = CARDS.findIndex(

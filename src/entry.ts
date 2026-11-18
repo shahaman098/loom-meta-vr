@@ -129,11 +129,13 @@ export function installEntryOverlay(world: World): void {
     <div class="status" id="loom-entry-status"></div>
     <div class="foot">Seated &middot; Hands only &middot; 5&ndash;10 minutes</div>
     <button class="quiet" id="loom-preview" type="button">Preview on this screen</button>
+    <button class="quiet" id="loom-reset" type="button">Reset progress</button>
   `;
   document.body.appendChild(overlay);
 
   const enter = overlay.querySelector<HTMLButtonElement>('#loom-enter')!;
   const preview = overlay.querySelector<HTMLButtonElement>('#loom-preview')!;
+  const reset = overlay.querySelector<HTMLButtonElement>('#loom-reset')!;
   const status = overlay.querySelector<HTMLDivElement>('#loom-entry-status')!;
 
   let hideTimer: number | null = null;
@@ -185,6 +187,15 @@ export function installEntryOverlay(world: World): void {
 
   preview.addEventListener('click', () => {
     hide();
+  });
+
+  reset.addEventListener('click', () => {
+    try {
+      window.localStorage.removeItem('loom.progress.v1');
+    } catch {
+      // Storage may be unavailable; reloading still starts a fresh session.
+    }
+    window.location.reload();
   });
 
   const onVisibility = (visibilityState: VisibilityState) => {
