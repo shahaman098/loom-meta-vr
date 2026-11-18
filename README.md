@@ -1,45 +1,76 @@
-# IWSDK App
+# Loom
 
-This project uses `iwsdk.config.json` for declarative scene, asset, component,
-XR, and emulator configuration. Application systems remain explicit in
-`src/index.ts`.
+A seated, hands-only weaving game for Meta VR, built with the
+[Immersive Web SDK](https://iwsdk.dev/) (IWSDK) for the **Meta VR Start
+Developer Competition 2026**.
+
+**Play:** https://loom-meta-vr.pages.dev
+
+Loom puts a small walnut loom on the table in front of you, strung with 25 brass
+pegs. Pinch a peg, pull a glowing thread to another peg, and release. The thread
+snaps into place and stays woven into the board. Each pattern card asks for a few
+connected threads; finish it and the tapestry flashes with a chord, then the next
+card adds a harder shape. After three cards the board opens into Free Weave.
+
+- Hands only: no controllers, menus, locomotion, or buttons in VR
+- Seated: every peg sits inside a two-foot reach
+- Runs in Meta Quest Browser and Meta VR Glasses Browser (WebXR)
+- Procedural art and synthesized audio: no downloaded models or textures
+
+## Controls
+
+| Action | Input |
+|---|---|
+| Pinch a peg | Hand pinch (or controller squeeze) |
+| Pull a thread | Move your hand while pinched |
+| Anchor a thread | Release near another peg |
+| Enter VR | **Enter VR** button on the page |
+
+## Run locally
 
 ```sh
 npm install
-npm run dev
+npm run dev        # managed dev server + XR emulator (opens a browser)
+npm run typecheck
+npm run build
+npm run preview
 ```
 
-Use the Runtime and Editor controls in the managed browser to switch between
-the running experience and its authored scene.
+`npm run dev` starts the IWSDK managed workspace and the IWER XR emulator. Use
+the emulator toolbar to switch between controllers and hands; the game is played
+with hand pinch. `npm run dev:down` stops the session.
 
-## Starter content
+## Deploy
 
-The robot and welcome panel are small examples of authored scene content plus
-runtime systems. The robot turns toward the player's head and plays a sound
-when pressed. To remove the robot, delete its scene node, its `RobotSystem`
-registration from `src/index.ts` or `src/index.js`, and its `Robot` registration
-from `src/components.ts` or `src/components.js`; you can then delete the unused
-robot component and system files. To remove the welcome panel, delete its scene
-node and its `PanelSystem` registration from the application entry point.
+The production build is a static site in `dist/`:
 
-The robot stands on the second of three numbered stations. The first holds dark
-pieces you can grab and move, and the third holds a ring you can spin in place.
-The studio props (the plinths and the dark pieces, plus the floor and stage in VR
-and Desktop 3D) are built in code in `src/scene-assets/studio.scene-asset.ts` or
-`.js`. The VR and Desktop 3D background furniture is built the same way in
-`src/scene-assets/decor.scene-asset.ts` or `.js`, so the starter downloads no
-extra models. To remove any of them, delete their scene nodes and their entries
-in `src/assets.ts` or `src/assets.js`, then delete the files you no longer use.
-The station labels are `public/ui/label-*.uikitml`.
+```sh
+npm run build
+npx wrangler pages deploy dist --project-name loom-meta-vr --branch main
+```
 
-The rest of the look is built-in components in the scene, which you can edit in
-the editor without code. The soft light on every object is the scene root's
-`IBLGradient` (select the Level Root to edit it), and the soft shadows under
-each object are `ContactShadow` nodes. In VR and Desktop 3D, the sky is the
-scene root's `DomeGradient` (its colors, tilt and dither are also on the Level
-Root), and the floor fades into it through the `DomeFade` on the floor node. AR
-projects have no sky or floor, so passthrough stays visible, and a
-`ShadowCatcher` node grounds the stations.
+`wrangler.toml` sets the Pages project and output directory. The live site is
+https://loom-meta-vr.pages.dev.
 
-- Minimal scene walkthrough: https://iwsdk.dev/guides/01b-minimal-scene.html
-- XR-enabled projects — IWER emulator controls: https://iwsdk.dev/guides/02-testing-experience.html#iwer-controls
+## How it works
+
+- `src/scene-assets/loom.scene-asset.ts` — table, frame, warp, pegs, card, floor
+- `src/loom.ts` — peg targeting, live thread, woven segments, pattern cards,
+  completion, Free Weave, Web Audio plucks and chords
+- `src/entry.ts` — the 2D **Enter VR** screen required by WebXR's user gesture
+- `src/components.ts` — `Peg` grid coordinates and observable `LoomStatus`
+- `public/scenes/main.iwsdk.scene.json` — authored composition and lighting
+
+The fingertip is the cursor: a pinch selects the nearest peg to the hand, so the
+thread starts where the player aims rather than where a grab collider happened to
+land. Woven cords are lifted just in front of the peg tips so they read against
+the felt. Pattern cards are painted to a `CanvasTexture` at runtime; audio is
+synthesized with the Web Audio API.
+
+## Evidence
+
+Screenshots and verified state transitions are in the parent workspace at
+`AI Meta/meta-vr-start-2026/evidence/`, and the submission copy is in
+`AI Meta/meta-vr-start-2026/SUBMISSION.md`.
+
+Built with IWSDK 1.1.0, Three.js r185, TypeScript, and Vite.

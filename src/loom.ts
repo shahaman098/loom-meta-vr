@@ -305,7 +305,6 @@ export class LoomSystem extends createSystem({
     this.ensureAudio();
     this.playPluck(chosen, 0.05);
     this.cardDirty = true;
-    console.info('[loom] grab', chosen, 'held', peg.index, this.activeHand);
     this.syncStatus();
   }
 
@@ -330,7 +329,6 @@ export class LoomSystem extends createSystem({
     this.lastFrom = from;
     this.lastTo = to;
 
-    console.info('[loom] release', from, 'target', to);
     if (to >= 0 && to !== from && this.celebrating === 0) {
       this.addSegment(from, to);
     }
@@ -392,7 +390,6 @@ export class LoomSystem extends createSystem({
     this.segmentKeys.push(key);
     this.segmentColors.push(color);
     this.playPluck(to, 0.06);
-    console.info('[loom] segment', from, '->', to, 'edges', this.segmentKeys.length);
 
     if (
       this.cardIndex < CARDS.length &&
@@ -403,7 +400,6 @@ export class LoomSystem extends createSystem({
       this.celebrating = 3.6;
       this.playChord();
       this.cardDirty = true;
-      console.info('[loom] card complete', this.cardIndex);
     }
     this.syncStatus();
   }
@@ -432,7 +428,6 @@ export class LoomSystem extends createSystem({
       segment.mesh.scale.set(0, 0, 0);
     }
     this.cardDirty = true;
-    console.info('[loom] advance to card', this.cardIndex);
     this.syncStatus();
   }
 
