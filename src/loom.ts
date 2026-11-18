@@ -827,6 +827,12 @@ export class LoomSystem extends createSystem({
       'mode',
       this.freeMode ? 'free' : this.dailyMode ? 'daily' : 'card',
     );
+    this.boardEntity.setValue(LoomStatus, 'streak', this.saved.streak);
+    this.boardEntity.setValue(
+      LoomStatus,
+      'highContrast',
+      this.highContrast,
+    );
     this.boardEntity.setValue(
       LoomStatus,
       'drawnEdges',

@@ -19,6 +19,8 @@ export const LoomStatus = createComponent('LoomStatus', {
   totalCards: { type: Types.Int32, default: 6 },
   completedCards: { type: Types.Int32, default: 0 },
   mode: { type: Types.String, default: 'card' },
+  streak: { type: Types.Int32, default: 0 },
+  highContrast: { type: Types.Boolean, default: false },
   drawnEdges: { type: Types.Int32, default: 0 },
   activePeg: { type: Types.Int32, default: -1 },
   targetPeg: { type: Types.Int32, default: -1 },
