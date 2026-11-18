@@ -169,4 +169,3 @@ Requires Node 20.19 or later. No environment variables or API keys are needed.
 - The textile images are public-domain works with their sources listed on each card; see [ARCHIVE.md](ARCHIVE.md).
 - The melodies (*Ode to Joy*, *Greensleeves*, *Sakura Sakura*, *La Folia*, *Amazing Grace*, an Andean pentatonic tune) are public domain and synthesised at runtime.
 - Built with the Immersive Web SDK and Three.js.
-- AI coding assistants were used during development.
