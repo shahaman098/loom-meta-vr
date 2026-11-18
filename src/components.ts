@@ -16,11 +16,15 @@ export const Peg = createComponent('Peg', {
 /** Observable state for debugging and evidence. */
 export const LoomStatus = createComponent('LoomStatus', {
   cardIndex: { type: Types.Int32, default: 0 },
+  totalCards: { type: Types.Int32, default: 6 },
+  completedCards: { type: Types.Int32, default: 0 },
+  mode: { type: Types.String, default: 'card' },
   drawnEdges: { type: Types.Int32, default: 0 },
   activePeg: { type: Types.Int32, default: -1 },
   targetPeg: { type: Types.Int32, default: -1 },
   celebrating: { type: Types.Boolean, default: false },
   edges: { type: Types.String, default: '' },
+  requiredEdges: { type: Types.String, default: '' },
   lastFrom: { type: Types.Int32, default: -1 },
   lastTo: { type: Types.Int32, default: -1 },
 });

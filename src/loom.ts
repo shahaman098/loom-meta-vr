@@ -15,6 +15,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   OneHandGrabbable,
+  PlaneGeometry,
   Quaternion,
   RayInteractable,
   SRGBColorSpace,
@@ -48,13 +49,28 @@ const THREAD_COLORS = [
 const UP = new Vector3(0, 1, 0);
 
 type CardDef = {
+  id: string;
   title: string;
+  source: string;
+  date: string;
+  institution: string;
+  license: string;
+  image?: string;
   edges: Array<[number, number]>;
 };
 
+const archiveImage = (file: string): string =>
+  `${import.meta.env.BASE_URL}archive/${file}`;
+
 const CARDS: CardDef[] = [
   {
-    title: 'FIRST THREAD',
+    id: 'coptic',
+    title: 'COPTIC KNOT',
+    source: 'Coptic textile fragment',
+    date: 'late 3rd–5th century',
+    institution: 'The Metropolitan Museum of Art',
+    license: 'CC0',
+    image: archiveImage('coptic.jpg'),
     edges: [
       [ENTRY_PEG, 0 * COLS + 0],
       [0 * COLS + 0, 2 * COLS + 0],
@@ -62,28 +78,128 @@ const CARDS: CardDef[] = [
     ],
   },
   {
-    title: 'CROWN',
+    id: 'ogival',
+    title: 'OGIVAL',
+    source: 'Ottoman silk fragment',
+    date: '1570–1580',
+    institution: 'Aga Khan Museum',
+    license: 'Public domain',
+    image: archiveImage('ottoman.jpg'),
     edges: [
       [ENTRY_PEG, 0 * COLS + 4],
       [0 * COLS + 4, 2 * COLS + 4],
       [2 * COLS + 4, 4 * COLS + 2],
       [4 * COLS + 2, 2 * COLS + 0],
-      [2 * COLS + 0, 0 * COLS + 0],
-      [0 * COLS + 0, ENTRY_PEG],
+      [2 * COLS + 0, ENTRY_PEG],
     ],
   },
   {
-    title: 'GEM',
+    id: 'flowering',
+    title: 'FLOWERING',
+    source: 'Kimono sleeve, red silk crepe',
+    date: '17th century',
+    institution: 'Cooper Hewitt',
+    license: 'Public domain',
+    image: archiveImage('japan.jpg'),
+    edges: [
+      [ENTRY_PEG, 0 * COLS + 4],
+      [0 * COLS + 4, 2 * COLS + 3],
+      [2 * COLS + 3, 4 * COLS + 4],
+      [4 * COLS + 4, 2 * COLS + 1],
+      [2 * COLS + 1, 0 * COLS + 0],
+    ],
+  },
+  {
+    id: 'bizarre',
+    title: 'BIZARRE',
+    source: 'Woven silk, bizarre design',
+    date: 'c. 1700–1705',
+    institution: 'Google Art Project',
+    license: 'Public domain',
+    image: archiveImage('italy.jpg'),
     edges: [
       [ENTRY_PEG, 0 * COLS + 4],
       [0 * COLS + 4, 4 * COLS + 4],
       [4 * COLS + 4, 2 * COLS + 2],
       [2 * COLS + 2, 4 * COLS + 0],
-      [4 * COLS + 0, 0 * COLS + 0],
-      [0 * COLS + 0, ENTRY_PEG],
+      [4 * COLS + 0, ENTRY_PEG],
+    ],
+  },
+  {
+    id: 'wholecloth',
+    title: 'WHOLE CLOTH',
+    source: 'Whole cloth quilt',
+    date: 'c. 1885',
+    institution: 'The Metropolitan Museum of Art',
+    license: 'CC0',
+    image: archiveImage('quilt2.jpg'),
+    edges: [
+      [ENTRY_PEG, 0 * COLS + 0],
+      [0 * COLS + 0, 4 * COLS + 0],
+      [4 * COLS + 0, 4 * COLS + 4],
+      [4 * COLS + 4, 0 * COLS + 4],
+      [0 * COLS + 4, 0 * COLS + 0],
+      [0 * COLS + 0, 2 * COLS + 2],
+    ],
+  },
+  {
+    id: 'andean',
+    title: 'ANDEAN STRIPE',
+    source: 'Cotton and wool textile',
+    date: '18th century',
+    institution: 'Cooper Hewitt',
+    license: 'Public domain',
+    image: archiveImage('peru2.jpg'),
+    edges: [
+      [ENTRY_PEG, 0 * COLS + 0],
+      [0 * COLS + 0, 0 * COLS + 1],
+      [0 * COLS + 1, 1 * COLS + 1],
+      [1 * COLS + 1, 1 * COLS + 0],
+      [1 * COLS + 0, 2 * COLS + 0],
+      [2 * COLS + 0, ENTRY_PEG],
     ],
   },
 ];
+
+const STORAGE_KEY = 'loom.progress.v1';
+
+const todayKey = (): string => {
+  const now = new Date();
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  const day = `${now.getDate()}`.padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+};
+
+type SavedProgress = {
+  completed: string[];
+  dailyDate: string;
+};
+
+const loadSaved = (): SavedProgress => {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw == null) {
+      return { completed: [], dailyDate: '' };
+    }
+    const parsed = JSON.parse(raw) as Partial<SavedProgress>;
+    return {
+      completed: Array.isArray(parsed.completed)
+        ? parsed.completed.filter((id): id is string => typeof id === 'string')
+        : [],
+      dailyDate: typeof parsed.dailyDate === 'string' ? parsed.dailyDate : '',
+    };
+  } catch {
+    return { completed: [], dailyDate: '' };
+  }
+};
+
+const saveSaved = (progress: SavedProgress): void => {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  } catch {
+    // A private-mode/denied-storage browser still plays; it just forgets.
+  }
+};
 
 type PegInfo = {
   entity: Entity;
@@ -91,6 +207,7 @@ type PegInfo = {
   row: number;
   col: number;
   position: Vector3;
+  tip: Mesh;
   tipMaterial: MeshStandardMaterial;
 };
 
@@ -133,6 +250,16 @@ export class LoomSystem extends createSystem({
   private lastTo = -1;
   private celebrating = 0;
   private cardIndex = 0;
+  private completedCards = new Set<string>();
+  private dailyMode = false;
+  private freeMode = false;
+  private dailyCard: CardDef | null = null;
+  private saved: SavedProgress = { completed: [], dailyDate: '' };
+  private cardImages = new Map<string, HTMLImageElement>();
+  private progressTiles: Mesh[] = [];
+  private progressTextures: CanvasTexture[] = [];
+  private assistTimer = 0;
+  private missStreak = 0;
   private drawnKeys = new Set<string>();
   private segmentKeys: string[] = [];
   private segmentColors: number[] = [];
@@ -158,9 +285,11 @@ export class LoomSystem extends createSystem({
     this.grab =
       (this.world.getSystem(GrabSystem) as GrabSystem | undefined) ?? null;
 
+    this.loadProgress();
     this.createPegs();
     this.createThreads();
     this.createCard();
+    this.createProgressStrip();
 
     const offGrab = this.queries.held.subscribe('qualify', (entity) => {
       this.onGrab(entity);
@@ -215,6 +344,7 @@ export class LoomSystem extends createSystem({
           row,
           col,
           position,
+          tip,
           tipMaterial,
         };
         this.pegs.push(info);
@@ -281,6 +411,212 @@ export class LoomSystem extends createSystem({
       map: this.cardTexture,
       toneMapped: false,
     });
+
+    for (const card of CARDS) {
+      if (card.image == null) {
+        continue;
+      }
+      const image = new Image();
+      image.onload = () => {
+        this.cardDirty = true;
+      };
+      image.src = card.image;
+      this.cardImages.set(card.id, image);
+    }
+  }
+
+  private loadProgress(): void {
+    this.saved = loadSaved();
+    this.completedCards = new Set(this.saved.completed);
+    const firstIncomplete = CARDS.findIndex(
+      (card) => !this.completedCards.has(card.id),
+    );
+    if (firstIncomplete >= 0) {
+      this.cardIndex = firstIncomplete;
+      this.dailyMode = false;
+      this.freeMode = false;
+      return;
+    }
+
+    this.cardIndex = CARDS.length;
+    const freshDaily = this.saved.dailyDate !== todayKey();
+    this.dailyMode = freshDaily;
+    this.freeMode = !freshDaily;
+    if (freshDaily) {
+      this.dailyCard = this.createDailyCard();
+    }
+  }
+
+  private saveProgress(): void {
+    this.saved = {
+      completed: Array.from(this.completedCards),
+      dailyDate: this.saved.dailyDate,
+    };
+    saveSaved(this.saved);
+  }
+
+  private activeCard(): CardDef | null {
+    if (this.cardIndex < CARDS.length) {
+      return CARDS[this.cardIndex];
+    }
+    if (this.dailyMode) {
+      return this.dailyCard;
+    }
+    return null;
+  }
+
+  private markCompleted(card: CardDef): void {
+    if (card.id.startsWith('daily-')) {
+      this.saved.dailyDate = todayKey();
+      this.saveProgress();
+      return;
+    }
+    this.completedCards.add(card.id);
+    this.saveProgress();
+    this.renderProgressTiles();
+  }
+
+  private createDailyCard(): CardDef {
+    let state = Number(todayKey().replace(/-/g, '')) >>> 0;
+    const random = (): number => {
+      state = (state + 0x6d2b79f5) | 0;
+      let t = Math.imul(state ^ (state >>> 15), 1 | state);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+
+    const start = ENTRY_PEG;
+    const used = new Set<string>();
+    const edges: Array<[number, number]> = [];
+    const moves: Array<[number, number]> = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
+    ];
+    let row = Math.floor(start / COLS);
+    let col = start % COLS;
+    for (let step = 0; step < 12 && edges.length < 6; step += 1) {
+      const options: Array<[number, number, number]> = [];
+      for (const [dr, dc] of moves) {
+        const nextRow = row + dr;
+        const nextCol = col + dc;
+        if (nextRow < 0 || nextRow >= ROWS || nextCol < 0 || nextCol >= COLS) {
+          continue;
+        }
+        const next = nextRow * COLS + nextCol;
+        const key = edgeKey(row * COLS + col, next);
+        if (!used.has(key)) {
+          options.push([nextRow, nextCol, next]);
+        }
+      }
+      if (options.length === 0) {
+        break;
+      }
+      const [nextRow, nextCol, next] = options[
+        Math.floor(random() * options.length)
+      ];
+      const key = edgeKey(row * COLS + col, next);
+      used.add(key);
+      edges.push([row * COLS + col, next]);
+      row = nextRow;
+      col = nextCol;
+    }
+
+    if (edges.length < 4) {
+      return {
+        id: `daily-${todayKey()}`,
+        title: 'DAILY WEAVE',
+        source: 'A new pattern each day',
+        date: todayKey(),
+        institution: 'Loom',
+        license: 'Today only',
+        edges: CARDS[2].edges,
+      };
+    }
+
+    return {
+      id: `daily-${todayKey()}`,
+      title: 'DAILY WEAVE',
+      source: 'A new pattern each day',
+      date: todayKey(),
+      institution: 'Loom',
+      license: 'Today only',
+      edges,
+    };
+  }
+
+  private createProgressStrip(): void {
+    const geometry = new PlaneGeometry(0.062, 0.062);
+    for (let i = 0; i < CARDS.length; i += 1) {
+      const material = new MeshBasicMaterial({
+        color: 0x0b1424,
+        toneMapped: false,
+      });
+      const mesh = new Mesh(geometry, material);
+      mesh.position.set(-0.225 + i * 0.09, 0.272, 0.036);
+      this.world.createTransformEntity(mesh, { parent: this.boardEntity });
+      this.progressTiles.push(mesh);
+    }
+    this.renderProgressTiles();
+  }
+
+  private renderProgressTiles(): void {
+    for (let index = 0; index < CARDS.length; index += 1) {
+      const mesh = this.progressTiles[index];
+      if (mesh == null) {
+        continue;
+      }
+      const card = CARDS[index];
+      const completed = this.completedCards.has(card.id);
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const context = canvas.getContext('2d');
+      if (context == null) {
+        continue;
+      }
+      context.fillStyle = completed ? '#0b1730' : '#070d18';
+      context.fillRect(0, 0, 128, 128);
+      context.strokeStyle = completed ? '#3b5d94' : '#1d2b44';
+      context.lineWidth = 6;
+      context.strokeRect(6, 6, 116, 116);
+      const gx = (col: number): number => 20 + (col / (COLS - 1)) * 88;
+      const gy = (row: number): number => 108 - (row / (ROWS - 1)) * 88;
+      for (let row = 0; row < ROWS; row += 1) {
+        for (let col = 0; col < COLS; col += 1) {
+          context.beginPath();
+          context.arc(gx(col), gy(row), 2.4, 0, Math.PI * 2);
+          context.fillStyle = completed ? '#7896c6' : '#1b2940';
+          context.fill();
+        }
+      }
+      if (completed) {
+        card.edges.forEach(([a, b], edgeIndex) => {
+          context.beginPath();
+          context.moveTo(gx(a % COLS), gy(Math.floor(a / COLS)));
+          context.lineTo(gx(b % COLS), gy(Math.floor(b / COLS)));
+          context.strokeStyle =
+            THREAD_COLORS[edgeIndex % THREAD_COLORS.length];
+          context.lineWidth = 6;
+          context.stroke();
+        });
+      }
+      const texture = new CanvasTexture(canvas);
+      texture.colorSpace = SRGBColorSpace;
+      const previous = this.progressTextures[index];
+      if (previous != null) {
+        previous.dispose();
+      }
+      this.progressTextures[index] = texture;
+      (mesh.material as MeshBasicMaterial).map = texture;
+      (mesh.material as MeshBasicMaterial).color.setHex(0xffffff);
+      (mesh.material as MeshBasicMaterial).needsUpdate = true;
+    }
   }
 
   private onGrab(entity: Entity): void {
@@ -331,6 +667,11 @@ export class LoomSystem extends createSystem({
 
     if (to >= 0 && to !== from && this.celebrating === 0) {
       this.addSegment(from, to);
+    } else if (to < 0) {
+      this.missStreak += 1;
+      if (this.missStreak >= 2) {
+        this.assistTimer = 8;
+      }
     }
     this.cardDirty = true;
     this.syncStatus();
@@ -341,6 +682,17 @@ export class LoomSystem extends createSystem({
       return;
     }
     this.boardEntity.setValue(LoomStatus, 'cardIndex', this.cardIndex);
+    this.boardEntity.setValue(LoomStatus, 'totalCards', CARDS.length);
+    this.boardEntity.setValue(
+      LoomStatus,
+      'completedCards',
+      this.completedCards.size,
+    );
+    this.boardEntity.setValue(
+      LoomStatus,
+      'mode',
+      this.freeMode ? 'free' : this.dailyMode ? 'daily' : 'card',
+    );
     this.boardEntity.setValue(
       LoomStatus,
       'drawnEdges',
@@ -351,6 +703,14 @@ export class LoomSystem extends createSystem({
       LoomStatus,
       'edges',
       Array.from(this.drawnKeys).join(','),
+    );
+    const active = this.activeCard();
+    this.boardEntity.setValue(
+      LoomStatus,
+      'requiredEdges',
+      active != null
+        ? active.edges.map(([a, b]) => `${a}:${b}`).join(',')
+        : '',
     );
     this.boardEntity.setValue(LoomStatus, 'lastFrom', this.lastFrom);
     this.boardEntity.setValue(LoomStatus, 'lastTo', this.lastTo);
@@ -391,24 +751,25 @@ export class LoomSystem extends createSystem({
     this.segmentColors.push(color);
     this.playPluck(to, 0.06);
 
+    const active = this.activeCard();
     if (
-      this.cardIndex < CARDS.length &&
-      this.isCardComplete(this.cardIndex) &&
+      active != null &&
+      !this.freeMode &&
+      this.isCardComplete(active) &&
       this.celebrating === 0 &&
       this.activePegIndex < 0
     ) {
+      this.markCompleted(active);
       this.celebrating = 3.6;
       this.playChord();
       this.cardDirty = true;
     }
+    this.missStreak = 0;
+    this.assistTimer = 0;
     this.syncStatus();
   }
 
-  private isCardComplete(cardIndex: number): boolean {
-    const card = CARDS[cardIndex];
-    if (card == null) {
-      return false;
-    }
+  private isCardComplete(card: CardDef): boolean {
     for (const [a, b] of card.edges) {
       if (!this.drawnKeys.has(edgeKey(a, b))) {
         return false;
@@ -419,7 +780,27 @@ export class LoomSystem extends createSystem({
 
   private advanceCard(): void {
     this.celebrating = 0;
-    this.cardIndex += 1;
+    if (this.cardIndex < CARDS.length) {
+      this.cardIndex += 1;
+      while (
+        this.cardIndex < CARDS.length &&
+        this.completedCards.has(CARDS[this.cardIndex].id)
+      ) {
+        this.cardIndex += 1;
+      }
+      if (this.cardIndex >= CARDS.length) {
+        const freshDaily = this.saved.dailyDate !== todayKey();
+        this.dailyMode = freshDaily;
+        this.freeMode = !freshDaily;
+        if (freshDaily) {
+          this.dailyCard = this.createDailyCard();
+        }
+      }
+    } else if (this.dailyMode) {
+      this.dailyMode = false;
+      this.freeMode = true;
+      this.dailyCard = null;
+    }
     this.drawnKeys.clear();
     this.segmentKeys.length = 0;
     this.segmentColors.length = 0;
@@ -460,12 +841,16 @@ export class LoomSystem extends createSystem({
   }
 
   private handLocal(hand: 'left' | 'right', out: Vector3): boolean {
-    const tip = this.player.indexTipSpaces[hand];
-    if (tip == null) {
+    const isHand = this.world.input.xr.isPrimary('hand', hand);
+    // Hands aim with the index fingertip; controller fallback aims from the
+    // grip pose so a denied hand-tracking permission still has a usable path.
+    const space = isHand
+      ? this.player.indexTipSpaces[hand]
+      : this.player.gripSpaces[hand];
+    if (space == null) {
       return false;
     }
-    // The index fingertip is the point a person aims with when pinching a peg.
-    tip.getWorldPosition(this.tmpTip);
+    space.getWorldPosition(this.tmpTip);
     this.tmpWorld.copy(this.tmpTip);
     this.board.worldToLocal(this.tmpWorld);
     out.copy(this.tmpWorld);
@@ -474,7 +859,7 @@ export class LoomSystem extends createSystem({
 
   private nearestPeg(position: Vector3, exclude: number): number {
     let best = -1;
-    let bestDistance = 0.1;
+    let bestDistance = this.assistTimer > 0 ? 0.15 : 0.1;
     for (const peg of this.pegs) {
       if (peg.index === exclude) {
         continue;
@@ -533,6 +918,9 @@ export class LoomSystem extends createSystem({
   }
 
   update(delta: number, time: number): void {
+    if (this.assistTimer > 0) {
+      this.assistTimer -= delta;
+    }
     if (this.celebrating > 0) {
       this.celebrating -= delta;
       if (this.celebrating <= 0) {
@@ -570,6 +958,14 @@ export class LoomSystem extends createSystem({
       }
       peg.tipMaterial.emissiveIntensity = intensity;
       peg.tipMaterial.emissive.setHex(color);
+      const hint =
+        this.cardIndex === 0 &&
+        this.drawnKeys.size === 0 &&
+        this.activePegIndex < 0 &&
+        peg.index === ENTRY_PEG;
+      peg.tip.scale.setScalar(
+        hint ? 1.35 + 0.18 * Math.sin(time * 5) : 1,
+      );
     }
 
     if (this.cardDirty) {
@@ -637,12 +1033,43 @@ export class LoomSystem extends createSystem({
     });
   }
 
+  private drawImageCover(
+    context: CanvasRenderingContext2D,
+    image: HTMLImageElement,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
+    const iw = image.naturalWidth || image.width;
+    const ih = image.naturalHeight || image.height;
+    if (iw <= 0 || ih <= 0) {
+      return;
+    }
+    const imageRatio = iw / ih;
+    const targetRatio = width / height;
+    let sx = 0;
+    let sy = 0;
+    let sw = iw;
+    let sh = ih;
+    if (imageRatio > targetRatio) {
+      sw = ih * targetRatio;
+      sx = (iw - sw) / 2;
+    } else {
+      sh = iw / targetRatio;
+      sy = (ih - sh) / 2;
+    }
+    context.drawImage(image, sx, sy, sw, sh, x, y, width, height);
+  }
+
   private drawCard(): void {
     const context = this.cardContext;
     const width = 600;
     const height = 800;
-    const free = this.cardIndex >= CARDS.length;
-    const card = free ? null : CARDS[this.cardIndex];
+    const card = this.activeCard();
+    const free = this.freeMode;
+    const daily = this.dailyMode;
+    const image = card?.image ? this.cardImages.get(card.id) : undefined;
 
     const background = context.createLinearGradient(0, 0, 0, height);
     background.addColorStop(0, '#0c1730');
@@ -650,44 +1077,74 @@ export class LoomSystem extends createSystem({
     context.fillStyle = background;
     context.fillRect(0, 0, width, height);
 
+    if (image != null && image.complete && image.naturalWidth > 0) {
+      context.globalAlpha = 0.58;
+      this.drawImageCover(context, image, 0, 0, width, height);
+      context.globalAlpha = 1;
+      const veil = context.createLinearGradient(0, 0, 0, height);
+      veil.addColorStop(0, 'rgba(5, 10, 20, 0.55)');
+      veil.addColorStop(0.45, 'rgba(5, 10, 20, 0.42)');
+      veil.addColorStop(1, 'rgba(5, 10, 20, 0.9)');
+      context.fillStyle = veil;
+      context.fillRect(0, 0, width, height);
+    }
+
     context.strokeStyle = '#263a5e';
     context.lineWidth = 4;
     context.strokeRect(14, 14, width - 28, height - 28);
 
-    context.fillStyle = '#7e93b6';
-    context.font = '600 20px ui-sans-serif, system-ui, sans-serif';
-    context.fillText('META LOOM', 42, 60);
+    context.fillStyle = '#8ea6c9';
+    context.font = '600 18px ui-sans-serif, system-ui, sans-serif';
+    context.fillText('META LOOM', 42, 56);
     context.textAlign = 'right';
     context.fillText(
-      free ? 'FREE WEAVE' : `CARD ${this.cardIndex + 1} / ${CARDS.length}`,
+      free ? 'FREE WEAVE' : daily ? 'DAILY WEAVE' : `CARD ${this.cardIndex + 1} / ${CARDS.length}`,
       width - 42,
-      60,
+      56,
     );
     context.textAlign = 'left';
 
     context.fillStyle = '#f4e6c9';
-    context.font = '700 44px Georgia, serif';
-    context.fillText(card?.title ?? 'FREE WEAVE', 42, 118);
+    context.font = '700 42px Georgia, serif';
+    context.fillText(
+      card?.title ?? (free ? 'THE LOOM IS FULL' : 'FREE WEAVE'),
+      42,
+      112,
+      500,
+    );
+
+    context.fillStyle = '#8ea6c9';
+    context.font = '400 15px ui-sans-serif, system-ui, sans-serif';
+    context.fillText(
+      card != null
+        ? `${card.date} · ${card.institution}`
+        : 'All six archive patterns woven.',
+      42,
+      144,
+      516,
+    );
 
     context.strokeStyle = '#33486d';
     context.lineWidth = 2;
     context.beginPath();
-    context.moveTo(42, 142);
-    context.lineTo(width - 42, 142);
+    context.moveTo(42, 162);
+    context.lineTo(width - 42, 162);
     context.stroke();
 
     const left = 70;
     const right = width - 70;
-    const top = 205;
-    const bottom = 610;
-    const gx = (col: number): number => left + (col / (COLS - 1)) * (right - left);
-    const gy = (row: number): number => bottom - (row / (ROWS - 1)) * (bottom - top);
+    const top = 212;
+    const bottom = 582;
+    const gx = (col: number): number =>
+      left + (col / (COLS - 1)) * (right - left);
+    const gy = (row: number): number =>
+      bottom - (row / (ROWS - 1)) * (bottom - top);
 
     for (let row = 0; row < ROWS; row += 1) {
       for (let col = 0; col < COLS; col += 1) {
         context.beginPath();
         context.arc(gx(col), gy(row), 5.5, 0, Math.PI * 2);
-        context.fillStyle = '#3d5478';
+        context.fillStyle = '#48648e';
         context.fill();
       }
     }
@@ -730,26 +1187,58 @@ export class LoomSystem extends createSystem({
     context.fillStyle = '#d7e6ff';
     context.font = '600 26px ui-sans-serif, system-ui, sans-serif';
     context.fillText(
-      free ? `${this.segmentKeys.length} threads woven` : `${done} / ${required.length} threads`,
+      free
+        ? `${this.segmentKeys.length} threads woven`
+        : `${done} / ${required.length} threads`,
       42,
-      682,
+      636,
     );
 
+    context.fillStyle = '#7f95ba';
+    context.font = '400 15px ui-sans-serif, system-ui, sans-serif';
+    if (free) {
+      context.fillText(
+        'All six archive patterns woven — keep going.',
+        42,
+        672,
+        516,
+      );
+    } else if (daily) {
+      context.fillText('A new pattern each day · Today only', 42, 672, 516);
+    } else if (card != null) {
+      context.fillText(`${card.source} · ${card.license}`, 42, 672, 516);
+    }
+
     context.fillStyle = '#6f84a8';
-    context.font = '400 20px ui-sans-serif, system-ui, sans-serif';
-    context.fillText('Pinch a brass peg.', 42, 728);
-    context.fillText('Pull to another peg, then release.', 42, 760);
+    context.font = '400 18px ui-sans-serif, system-ui, sans-serif';
+    if (free) {
+      context.fillText('Free Weave. No card. No timer.', 42, 724);
+      context.fillText('Keep pulling threads through the pegs.', 42, 752);
+    } else if (daily) {
+      context.fillText('Pinch a brass peg.', 42, 724);
+      context.fillText('Pull to another peg, then release.', 42, 752);
+    } else {
+      context.fillText('Pinch a brass peg.', 42, 724);
+      context.fillText('Pull to another peg, then release.', 42, 752);
+    }
 
     if (this.celebrating > 0) {
-      context.fillStyle = 'rgba(5, 10, 20, 0.72)';
+      context.fillStyle = 'rgba(5, 10, 20, 0.76)';
       context.fillRect(0, 0, width, height);
       context.fillStyle = '#ffe6b8';
       context.font = '700 76px Georgia, serif';
       context.textAlign = 'center';
-      context.fillText('WOVEN', width / 2, 370);
+      context.fillText('WOVEN', width / 2, 360);
       context.fillStyle = '#9fb6d8';
       context.font = '500 24px ui-sans-serif, system-ui, sans-serif';
-      context.fillText(card?.title ?? '', width / 2, 420);
+      context.fillText(card?.title ?? '', width / 2, 412);
+      context.fillStyle = '#6f84a8';
+      context.font = '400 17px ui-sans-serif, system-ui, sans-serif';
+      context.fillText(
+        daily ? 'A new pattern each day' : 'Archive pattern complete',
+        width / 2,
+        446,
+      );
       context.textAlign = 'left';
     }
 
