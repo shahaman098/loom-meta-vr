@@ -108,6 +108,13 @@ function injectStyle(): void {
       font-size: 13px;
       color: #ffb35c;
     }
+    #loom-entry .streak {
+      min-height: 16px;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #ffc06a;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -127,16 +134,46 @@ export function installEntryOverlay(world: World): void {
     <div class="rule"></div>
     <button id="loom-enter" type="button">Enter VR</button>
     <div class="status" id="loom-entry-status"></div>
+    <div class="streak" id="loom-streak"></div>
     <div class="foot">Seated &middot; Hands only &middot; 5&ndash;10 minutes</div>
     <button class="quiet" id="loom-preview" type="button">Preview on this screen</button>
+    <button class="quiet" id="loom-contrast" type="button">High contrast: off</button>
     <button class="quiet" id="loom-reset" type="button">Reset progress</button>
   `;
   document.body.appendChild(overlay);
 
   const enter = overlay.querySelector<HTMLButtonElement>('#loom-enter')!;
   const preview = overlay.querySelector<HTMLButtonElement>('#loom-preview')!;
+  const contrast = overlay.querySelector<HTMLButtonElement>('#loom-contrast')!;
   const reset = overlay.querySelector<HTMLButtonElement>('#loom-reset')!;
   const status = overlay.querySelector<HTMLDivElement>('#loom-entry-status')!;
+  const streakEl = overlay.querySelector<HTMLDivElement>('#loom-streak')!;
+  try {
+    const raw = window.localStorage.getItem('loom.progress.v1');
+    if (raw != null) {
+      const saved = JSON.parse(raw) as { streak?: unknown };
+      if (
+        typeof saved.streak === 'number' &&
+        Number.isFinite(saved.streak) &&
+        saved.streak > 1
+      ) {
+        streakEl.textContent = `${Math.floor(saved.streak)}-day weave streak`;
+      }
+    }
+  } catch {
+    // The streak is a bonus; failure to read it should not block entry.
+  }
+  const highContrastKey = 'loom.a11y.highContrast';
+  const contrastOn = (): boolean => {
+    try {
+      return window.localStorage.getItem(highContrastKey) === '1';
+    } catch {
+      return false;
+    }
+  };
+  contrast.textContent = contrastOn()
+    ? 'High contrast: on'
+    : 'High contrast: off';
 
   let hideTimer: number | null = null;
 
@@ -187,6 +224,18 @@ export function installEntryOverlay(world: World): void {
 
   preview.addEventListener('click', () => {
     hide();
+  });
+
+  contrast.addEventListener('click', () => {
+    try {
+      window.localStorage.setItem(
+        highContrastKey,
+        contrastOn() ? '0' : '1',
+      );
+    } catch {
+      // The card still renders; only the preference cannot be saved.
+    }
+    window.location.reload();
   });
 
   reset.addEventListener('click', () => {

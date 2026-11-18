@@ -164,33 +164,75 @@ const CARDS: CardDef[] = [
 
 const STORAGE_KEY = 'loom.progress.v1';
 
-const todayKey = (): string => {
-  const now = new Date();
-  const month = `${now.getMonth() + 1}`.padStart(2, '0');
-  const day = `${now.getDate()}`.padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
+const dateKey = (date: Date): string => {
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+};
+
+const todayKey = (): string => dateKey(new Date());
+
+const yesterdayKey = (): string => {
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+  return dateKey(date);
+};
+
+const formatTime = (seconds: number): string => {
+  const total = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(total / 60);
+  const remainder = total % 60;
+  return `${minutes}:${remainder.toString().padStart(2, '0')}`;
 };
 
 type SavedProgress = {
   completed: string[];
   dailyDate: string;
+  bestTimes: Record<string, number>;
+  streak: number;
+  lastDailyDate: string;
 };
+
+const emptySaved = (): SavedProgress => ({
+  completed: [],
+  dailyDate: '',
+  bestTimes: {},
+  streak: 0,
+  lastDailyDate: '',
+});
 
 const loadSaved = (): SavedProgress => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw == null) {
-      return { completed: [], dailyDate: '' };
+      return emptySaved();
     }
     const parsed = JSON.parse(raw) as Partial<SavedProgress>;
+    const bestTimes: Record<string, number> = {};
+    if (parsed.bestTimes != null && typeof parsed.bestTimes === 'object') {
+      for (const [id, value] of Object.entries(parsed.bestTimes)) {
+        if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+          bestTimes[id] = value;
+        }
+      }
+    }
     return {
       completed: Array.isArray(parsed.completed)
         ? parsed.completed.filter((id): id is string => typeof id === 'string')
         : [],
       dailyDate: typeof parsed.dailyDate === 'string' ? parsed.dailyDate : '',
+      bestTimes,
+      streak:
+        typeof parsed.streak === 'number' && Number.isFinite(parsed.streak)
+          ? Math.max(0, Math.floor(parsed.streak))
+          : 0,
+      lastDailyDate:
+        typeof parsed.lastDailyDate === 'string'
+          ? parsed.lastDailyDate
+          : '',
     };
   } catch {
-    return { completed: [], dailyDate: '' };
+    return emptySaved();
   }
 };
 
@@ -256,12 +298,21 @@ export class LoomSystem extends createSystem({
   private dailyMode = false;
   private freeMode = false;
   private dailyCard: CardDef | null = null;
-  private saved: SavedProgress = { completed: [], dailyDate: '' };
+  private saved: SavedProgress = emptySaved();
   private cardImages = new Map<string, HTMLImageElement>();
   private progressTiles: Mesh[] = [];
   private progressTextures: CanvasTexture[] = [];
   private assistTimer = 0;
   private missStreak = 0;
+  private idleTimer = 0;
+  private cardStart = 0;
+  private lastTime = 0;
+  private lastBest = 0;
+  private highContrast = false;
+  private hintMesh!: Mesh;
+  private hintMaterial!: MeshStandardMaterial;
+  private hintPegA = -1;
+  private hintPegB = -1;
   private drawnKeys = new Set<string>();
   private segmentKeys: string[] = [];
   private segmentColors: number[] = [];
@@ -285,6 +336,12 @@ export class LoomSystem extends createSystem({
 
     this.grab =
       (this.world.getSystem(GrabSystem) as GrabSystem | undefined) ?? null;
+    try {
+      this.highContrast =
+        window.localStorage.getItem('loom.a11y.highContrast') === '1';
+    } catch {
+      this.highContrast = false;
+    }
 
     this.loadProgress();
     this.createPegs();
@@ -379,7 +436,7 @@ export class LoomSystem extends createSystem({
         new MeshStandardMaterial({
           color: hex,
           emissive: hex,
-          emissiveIntensity: 3.2,
+          emissiveIntensity: this.highContrast ? 4.6 : 3.2,
           toneMapped: false,
           roughness: 0.35,
           metalness: 0,
@@ -396,7 +453,7 @@ export class LoomSystem extends createSystem({
     this.liveMaterial = new MeshStandardMaterial({
       color: '#fff4dd',
       emissive: '#fff4dd',
-      emissiveIntensity: 3.6,
+      emissiveIntensity: this.highContrast ? 5 : 3.6,
       toneMapped: false,
       roughness: 0.23,
       metalness: 0,
@@ -404,6 +461,23 @@ export class LoomSystem extends createSystem({
     this.liveMesh = new Mesh(geometry, this.liveMaterial);
     this.liveMesh.scale.set(0, 0, 0);
     this.world.createTransformEntity(this.liveMesh, {
+      parent: this.boardEntity,
+    });
+
+    this.hintMaterial = new MeshStandardMaterial({
+      color: '#ffe6b8',
+      emissive: '#ffe6b8',
+      emissiveIntensity: 1.2,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+      toneMapped: false,
+      roughness: 0.4,
+      metalness: 0,
+    });
+    this.hintMesh = new Mesh(geometry, this.hintMaterial);
+    this.hintMesh.scale.set(0, 0, 0);
+    this.world.createTransformEntity(this.hintMesh, {
       parent: this.boardEntity,
     });
   }
@@ -460,6 +534,7 @@ export class LoomSystem extends createSystem({
       this.cardIndex = firstIncomplete;
       this.dailyMode = false;
       this.freeMode = false;
+      this.cardStart = performance.now();
       return;
     }
 
@@ -470,12 +545,16 @@ export class LoomSystem extends createSystem({
     if (freshDaily) {
       this.dailyCard = this.createDailyCard();
     }
+    this.cardStart = performance.now();
   }
 
   private saveProgress(): void {
     this.saved = {
       completed: Array.from(this.completedCards),
       dailyDate: this.saved.dailyDate,
+      bestTimes: this.saved.bestTimes,
+      streak: this.saved.streak,
+      lastDailyDate: this.saved.lastDailyDate,
     };
     saveSaved(this.saved);
   }
@@ -491,14 +570,40 @@ export class LoomSystem extends createSystem({
   }
 
   private markCompleted(card: CardDef): void {
+    const elapsed = Math.max(
+      0.1,
+      (performance.now() - this.cardStart) / 1000,
+    );
+    this.lastTime = elapsed;
+    const best = this.saved.bestTimes[card.id];
+    if (best == null || elapsed < best) {
+      this.saved.bestTimes[card.id] = elapsed;
+      this.lastBest = elapsed;
+    } else {
+      this.lastBest = best;
+    }
+
     if (card.id.startsWith('daily-')) {
       this.saved.dailyDate = todayKey();
+      this.recordDaily();
       this.saveProgress();
       return;
     }
     this.completedCards.add(card.id);
     this.saveProgress();
     this.renderProgressTiles();
+  }
+
+  private recordDaily(): void {
+    const today = todayKey();
+    if (this.saved.lastDailyDate === today) {
+      return;
+    }
+    this.saved.streak =
+      this.saved.lastDailyDate === yesterdayKey()
+        ? Math.max(1, this.saved.streak) + 1
+        : 1;
+    this.saved.lastDailyDate = today;
   }
 
   private createDailyCard(): CardDef {
@@ -663,6 +768,8 @@ export class LoomSystem extends createSystem({
       }
     }
     this.activePegIndex = chosen;
+    this.idleTimer = 0;
+    this.hideHint();
     this.ensureAudio();
     this.playPluck(chosen, 0.05);
     this.cardDirty = true;
@@ -687,6 +794,8 @@ export class LoomSystem extends createSystem({
     this.activeHand = null;
     this.targetIndex = -1;
     this.liveMesh.scale.set(0, 0, 0);
+    this.idleTimer = 0;
+    this.hideHint();
     this.lastFrom = from;
     this.lastTo = to;
 
@@ -791,6 +900,7 @@ export class LoomSystem extends createSystem({
     }
     this.missStreak = 0;
     this.assistTimer = 0;
+    this.idleTimer = 0;
     this.syncStatus();
   }
 
@@ -836,8 +946,48 @@ export class LoomSystem extends createSystem({
         segment.mesh.scale.set(0, 0, 0);
       }
     }
+    this.cardStart = performance.now();
+    this.lastTime = 0;
+    this.lastBest = 0;
+    this.idleTimer = 0;
+    this.hideHint();
     this.cardDirty = true;
     this.syncStatus();
+  }
+
+  private hideHint(): void {
+    this.hintMesh.scale.set(0, 0, 0);
+    this.hintPegA = -1;
+    this.hintPegB = -1;
+  }
+
+  private updateHint(time: number): void {
+    const card = this.activeCard();
+    if (card == null) {
+      this.hideHint();
+      return;
+    }
+    let next: [number, number] | null = null;
+    for (const [a, b] of card.edges) {
+      if (!this.drawnKeys.has(edgeKey(a, b))) {
+        next = [a, b];
+        break;
+      }
+    }
+    if (next == null) {
+      this.hideHint();
+      return;
+    }
+    const from = this.pegByIndex.get(next[0]);
+    const to = this.pegByIndex.get(next[1]);
+    if (from == null || to == null) {
+      this.hideHint();
+      return;
+    }
+    this.hintPegA = next[0];
+    this.hintPegB = next[1];
+    this.setSegmentBetween(this.hintMesh, from.position, to.position);
+    this.hintMaterial.opacity = 0.42 + 0.14 * Math.sin(time * 2.4);
   }
 
   private setSegmentBetween(mesh: Mesh, a: Vector3, b: Vector3): void {
@@ -965,21 +1115,39 @@ export class LoomSystem extends createSystem({
 
     if (this.activePegIndex >= 0 && this.world.session != null) {
       this.updateHeld();
+      this.idleTimer = 0;
+      this.hideHint();
     } else {
       this.updateIdleHover();
+      if (this.celebrating > 0 || this.world.session == null) {
+        this.idleTimer = 0;
+        this.hideHint();
+      } else {
+        this.idleTimer += delta;
+        if (this.idleTimer > 12) {
+          this.updateHint(time);
+        } else {
+          this.hideHint();
+        }
+      }
     }
     if (this.targetIndex !== this.statusTarget) {
       this.syncStatus();
     }
 
     for (const peg of this.pegs) {
-      let intensity = 0.85 + 0.3 * Math.sin(time * 2.2 + peg.index * 0.65);
+      let intensity = this.highContrast
+        ? 1.6 + 0.4 * Math.sin(time * 2.2 + peg.index * 0.65)
+        : 0.85 + 0.3 * Math.sin(time * 2.2 + peg.index * 0.65);
       let color = PEG_TIP_COLOR;
       if (peg.index === this.activePegIndex) {
-        intensity = 3.4;
+        intensity = 4.4;
         color = 0xffffff;
       } else if (peg.index === this.targetIndex) {
-        intensity = 3.1;
+        intensity = 4.0;
+        color = 0xfff2d0;
+      } else if (peg.index === this.hintPegA || peg.index === this.hintPegB) {
+        intensity = 2.9 + 0.5 * Math.sin(time * 4);
         color = 0xfff2d0;
       } else if (this.celebrating > 0) {
         intensity = 2.2 + 1.9 * Math.sin(time * 11 + peg.index);
@@ -1107,14 +1275,27 @@ export class LoomSystem extends createSystem({
     const free = this.freeMode;
     const daily = this.dailyMode;
     const image = card?.image ? this.cardImages.get(card.id) : undefined;
+    const hc = this.highContrast;
+    const ink = hc ? '#ffffff' : '#f4e6c9';
+    const sub = hc ? '#ffffff' : '#8ea6c9';
+    const line = hc ? '#ffffff' : '#33486d';
+    const dot = hc ? '#ffffff' : '#48648e';
+    const bodyInk = hc ? '#ffffff' : '#7f95ba';
+    const quiet = hc ? '#ffffff' : '#6f84a8';
+    const border = hc ? '#ffffff' : '#263a5e';
 
-    const background = context.createLinearGradient(0, 0, 0, height);
-    background.addColorStop(0, '#0c1730');
-    background.addColorStop(1, '#060b16');
-    context.fillStyle = background;
-    context.fillRect(0, 0, width, height);
+    if (hc) {
+      context.fillStyle = '#000000';
+      context.fillRect(0, 0, width, height);
+    } else {
+      const background = context.createLinearGradient(0, 0, 0, height);
+      background.addColorStop(0, '#0c1730');
+      background.addColorStop(1, '#060b16');
+      context.fillStyle = background;
+      context.fillRect(0, 0, width, height);
+    }
 
-    if (image != null && image.complete && image.naturalWidth > 0) {
+    if (!hc && image != null && image.complete && image.naturalWidth > 0) {
       context.globalAlpha = 0.58;
       this.drawImageCover(context, image, 0, 0, width, height);
       context.globalAlpha = 1;
@@ -1126,11 +1307,11 @@ export class LoomSystem extends createSystem({
       context.fillRect(0, 0, width, height);
     }
 
-    context.strokeStyle = '#263a5e';
+    context.strokeStyle = border;
     context.lineWidth = 4;
     context.strokeRect(14, 14, width - 28, height - 28);
 
-    context.fillStyle = '#8ea6c9';
+    context.fillStyle = sub;
     context.font = '600 18px ui-sans-serif, system-ui, sans-serif';
     context.fillText('META LOOM', 42, 56);
     context.textAlign = 'right';
@@ -1141,7 +1322,7 @@ export class LoomSystem extends createSystem({
     );
     context.textAlign = 'left';
 
-    context.fillStyle = '#f4e6c9';
+    context.fillStyle = ink;
     context.font = '700 42px Georgia, serif';
     context.fillText(
       card?.title ?? (free ? 'THE LOOM IS FULL' : 'FREE WEAVE'),
@@ -1150,7 +1331,7 @@ export class LoomSystem extends createSystem({
       500,
     );
 
-    context.fillStyle = '#8ea6c9';
+    context.fillStyle = sub;
     context.font = '400 15px ui-sans-serif, system-ui, sans-serif';
     context.fillText(
       card != null
@@ -1161,7 +1342,7 @@ export class LoomSystem extends createSystem({
       516,
     );
 
-    context.strokeStyle = '#33486d';
+    context.strokeStyle = line;
     context.lineWidth = 2;
     context.beginPath();
     context.moveTo(42, 162);
@@ -1181,7 +1362,7 @@ export class LoomSystem extends createSystem({
       for (let col = 0; col < COLS; col += 1) {
         context.beginPath();
         context.arc(gx(col), gy(row), 5.5, 0, Math.PI * 2);
-        context.fillStyle = '#48648e';
+        context.fillStyle = dot;
         context.fill();
       }
     }
@@ -1221,7 +1402,7 @@ export class LoomSystem extends createSystem({
 
     const done = required.filter(([a, b]) => this.drawnKeys.has(edgeKey(a, b)))
       .length;
-    context.fillStyle = '#d7e6ff';
+    context.fillStyle = hc ? '#ffffff' : '#d7e6ff';
     context.font = '600 26px ui-sans-serif, system-ui, sans-serif';
     context.fillText(
       free
@@ -1231,7 +1412,7 @@ export class LoomSystem extends createSystem({
       636,
     );
 
-    context.fillStyle = '#7f95ba';
+    context.fillStyle = bodyInk;
     context.font = '400 15px ui-sans-serif, system-ui, sans-serif';
     if (free) {
       context.fillText(
@@ -1241,12 +1422,16 @@ export class LoomSystem extends createSystem({
         516,
       );
     } else if (daily) {
-      context.fillText('A new pattern each day · Today only', 42, 672, 516);
+      const streak =
+        this.saved.streak > 0
+          ? `Daily weave · ${this.saved.streak}-day streak`
+          : 'Daily weave · Today only';
+      context.fillText(streak, 42, 672, 516);
     } else if (card != null) {
       context.fillText(`${card.source} · ${card.license}`, 42, 672, 516);
     }
 
-    context.fillStyle = '#6f84a8';
+    context.fillStyle = quiet;
     context.font = '400 18px ui-sans-serif, system-ui, sans-serif';
     if (free) {
       context.fillText('Free Weave. No card. No timer.', 42, 724);
@@ -1260,22 +1445,35 @@ export class LoomSystem extends createSystem({
     }
 
     if (this.celebrating > 0) {
-      context.fillStyle = 'rgba(5, 10, 20, 0.76)';
+      context.fillStyle = hc ? 'rgba(0, 0, 0, 0.92)' : 'rgba(5, 10, 20, 0.76)';
       context.fillRect(0, 0, width, height);
-      context.fillStyle = '#ffe6b8';
+      context.fillStyle = hc ? '#ffffff' : '#ffe6b8';
       context.font = '700 76px Georgia, serif';
       context.textAlign = 'center';
       context.fillText('WOVEN', width / 2, 360);
-      context.fillStyle = '#9fb6d8';
+      context.fillStyle = hc ? '#ffffff' : '#9fb6d8';
       context.font = '500 24px ui-sans-serif, system-ui, sans-serif';
       context.fillText(card?.title ?? '', width / 2, 412);
-      context.fillStyle = '#6f84a8';
+      context.fillStyle = quiet;
       context.font = '400 17px ui-sans-serif, system-ui, sans-serif';
       context.fillText(
         daily ? 'A new pattern each day' : 'Archive pattern complete',
         width / 2,
         446,
       );
+      if (!daily && this.lastTime > 0) {
+        const bestLine =
+          this.lastBest > 0 && this.lastBest + 0.5 < this.lastTime
+            ? `  ·  best ${formatTime(this.lastBest)}`
+            : '';
+        context.fillStyle = hc ? '#ffffff' : '#d7e6ff';
+        context.font = '500 19px ui-sans-serif, system-ui, sans-serif';
+        context.fillText(
+          `Woven in ${formatTime(this.lastTime)}${bestLine}`,
+          width / 2,
+          480,
+        );
+      }
       context.textAlign = 'left';
     }
 

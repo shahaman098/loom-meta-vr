@@ -20,6 +20,10 @@ date-seeded **Daily Weave** follows the archive, then **Free Weave**.
 - Six archive cards with real provenance; daily weave; local progression
 - Procedural stage and synthesized audio; six public-domain archive photographs
 - Assist: after two missed releases, the peg target widens briefly
+- Idle hint thread and next-peg glow after 12 seconds without a weave
+- Completion time and best time on the WOVEN card
+- Daily weave streak shown on the entry screen
+- High-contrast mode toggle on the entry screen
 - Free Weave keeps the final daily tapestry on the loom
 - Hand tracking is requested as optional; controller squeeze is a fallback
 
