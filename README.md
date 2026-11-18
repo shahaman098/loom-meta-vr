@@ -20,6 +20,7 @@ date-seeded **Daily Weave** follows the archive, then **Free Weave**.
 - Six archive cards with real provenance; daily weave; local progression
 - Procedural stage and synthesized audio; six public-domain archive photographs
 - Assist: after two missed releases, the peg target widens briefly
+- Free Weave keeps the final daily tapestry on the loom
 - Hand tracking is requested as optional; controller squeeze is a fallback
 
 ## Controls

@@ -19,6 +19,7 @@ import {
   Quaternion,
   RayInteractable,
   SRGBColorSpace,
+  TorusGeometry,
   Vector3,
   createSystem,
 } from '@iwsdk/core';
@@ -209,6 +210,7 @@ type PegInfo = {
   position: Vector3;
   tip: Mesh;
   tipMaterial: MeshStandardMaterial;
+  hintRing: Mesh | null;
 };
 
 const edgeKey = (a: number, b: number): string =>
@@ -265,7 +267,6 @@ export class LoomSystem extends createSystem({
   private segmentColors: number[] = [];
 
   private tmpWorld = new Vector3();
-  private tmpLocal = new Vector3();
   private tmpHand = new Vector3();
   private tmpDirection = new Vector3();
   private tmpMidpoint = new Vector3();
@@ -338,6 +339,22 @@ export class LoomSystem extends createSystem({
         });
 
         const index = row * COLS + col;
+        let hintRing: Mesh | null = null;
+        if (index === ENTRY_PEG) {
+          hintRing = new Mesh(
+            new TorusGeometry(0.027, 0.0022, 8, 32),
+            new MeshBasicMaterial({
+              color: 0xffe6b8,
+              transparent: true,
+              opacity: 0.8,
+              depthWrite: false,
+              toneMapped: false,
+            }),
+          );
+          hintRing.position.z = 0.055;
+          hintRing.name = 'peg-hint-ring';
+          object.add(hintRing);
+        }
         const info: PegInfo = {
           entity,
           index,
@@ -346,6 +363,7 @@ export class LoomSystem extends createSystem({
           position,
           tip,
           tipMaterial,
+          hintRing,
         };
         this.pegs.push(info);
         this.pegByIndex.set(index, info);
@@ -787,6 +805,7 @@ export class LoomSystem extends createSystem({
 
   private advanceCard(): void {
     this.celebrating = 0;
+    const keepTapestry = this.dailyMode && this.cardIndex >= CARDS.length;
     if (this.cardIndex < CARDS.length) {
       this.cardIndex += 1;
       while (
@@ -808,12 +827,14 @@ export class LoomSystem extends createSystem({
       this.freeMode = true;
       this.dailyCard = null;
     }
-    this.drawnKeys.clear();
-    this.segmentKeys.length = 0;
-    this.segmentColors.length = 0;
-    for (const segment of this.segments) {
-      segment.key = '';
-      segment.mesh.scale.set(0, 0, 0);
+    if (!keepTapestry) {
+      this.drawnKeys.clear();
+      this.segmentKeys.length = 0;
+      this.segmentColors.length = 0;
+      for (const segment of this.segments) {
+        segment.key = '';
+        segment.mesh.scale.set(0, 0, 0);
+      }
     }
     this.cardDirty = true;
     this.syncStatus();
@@ -973,6 +994,15 @@ export class LoomSystem extends createSystem({
       peg.tip.scale.setScalar(
         hint ? 1.35 + 0.18 * Math.sin(time * 5) : 1,
       );
+      if (peg.hintRing != null) {
+        peg.hintRing.visible = hint;
+        if (hint) {
+          const pulse = 1 + 0.2 * Math.sin(time * 4.2);
+          peg.hintRing.scale.setScalar(pulse);
+          (peg.hintRing.material as MeshBasicMaterial).opacity =
+            0.5 + 0.35 * Math.sin(time * 4.2);
+        }
+      }
     }
 
     if (this.cardDirty) {
